@@ -1,0 +1,1483 @@
+QUESTION: how does the persist middleware rehydrate state?
+
+--- docs/reference/integrations/persisting-store-data.md:319-399 ---
+export function StoreConsumer() {
+  // hydrate persisted store after on mount
+  useEffect(() => {
+    useBoundStore.persist.rehydrate();
+  }, [])
+
+  return (
+    //...
+  )
+}
+```
+
+## API
+
+> Version: >=3.6.3
+
+The Persist API enables you to do a number of interactions
+with the Persist middleware
+from inside or outside of a React component.
+
+### `getOptions`
+
+> Type: `() => Partial<PersistOptions>`
+
+> Returns: Options of the Persist middleware
+
+For example, it can be used to obtain the storage name:
+
+```ts
+useBoundStore.persist.getOptions().name
+```
+
+### `setOptions`
+
+> Type: `(newOptions: Partial<PersistOptions>) => void`
+
+Changes the middleware options.
+Note that the new options will be merged with the current ones.
+
+For instance, this can be used to change the storage name:
+
+```ts
+useBoundStore.persist.setOptions({
+  name: 'new-name',
+})
+```
+
+Or even to change the storage engine:
+
+```ts
+useBoundStore.persist.setOptions({
+  storage: createJSONStorage(() => sessionStorage),
+})
+```
+
+### `clearStorage`
+
+> Type: `() => void`
+
+Clears everything stored under the [name](#name) key.
+
+```ts
+useBoundStore.persist.clearStorage()
+```
+
+### `rehydrate`
+
+> Type: `() => Promise<void>`
+
+In some cases, you might want to trigger the rehydration manually.
+This can be done by calling the `rehydrate` method.
+
+```ts
+await useBoundStore.persist.rehydrate()
+```
+
+### `hasHydrated`
+
+> Type: `() => boolean`
+
+
+--- docs/reference/integrations/persisting-store-data.md:722-744 ---
+export const useBearStore = create<BearState>()(
+  persist(
+    (set) => ({
+      ...initialState,
+      // ...
+    }),
+    {
+      name: 'food-storage',
+      storage,
+    },
+  ),
+)
+```
+
+### How can I rehydrate on storage event
+
+You can use the Persist API to create your own implementation,
+similar to the example below:
+
+```ts
+type StoreWithPersist = Mutate<StoreApi<State>, [["zustand/persist", unknown]]>
+
+
+--- docs/reference/integrations/persisting-store-data.md:399-416 ---
+This is a non-reactive getter to check
+if the storage has been hydrated
+(note that it updates when calling [`rehydrate`](#rehydrate)).
+
+```ts
+useBoundStore.persist.hasHydrated()
+```
+
+### `onHydrate`
+
+> Type: `(listener: (state) => void) => () => void`
+
+> Returns: Unsubscribe function
+
+This listener will be called when the hydration process starts.
+
+```ts
+
+--- docs/reference/integrations/persisting-store-data.md:574-589 ---
+const bears = useStore(useBearStore, (state) => state.bears)
+```
+
+Credits: [This reply to an issue](https://github.com/pmndrs/zustand/issues/938#issuecomment-1481801942), which points to [this blog post](https://dev.to/abdulsamad/how-to-use-zustands-persist-middleware-in-nextjs-4lb5).
+
+## FAQ
+
+### How can I check if my store has been hydrated
+
+There are a few different ways to do this.
+
+You can use the [`onRehydrateStorage`](#onrehydratestorage)
+listener function to update a field in the store:
+
+```ts
+
+--- docs/reference/middlewares/persist.md:885-912 ---
+const positionStore = createStore<PositionStore>()(
+  persist(
+    (set) => ({
+      position: { x: 0, y: 0 },
+      setPosition: (position) => set({ position }),
+    }),
+    {
+      name: 'position-storage',
+      skipHydration: true,
+    },
+  ),
+)
+```
+
+Since we skipped hydration in the initial setup, we will manually rehydrate the state. Here, we’re
+using `setTimeout` to simulate a delayed rehydration.
+
+```ts
+setTimeout(() => {
+  positionStore.persist.rehydrate()
+}, 2000)
+```
+
+Next, we'll track the mouse movements inside a div and update the store with the new position.
+
+```ts
+const $dotContainer = document.getElementById('dot-container') as HTMLDivElement
+
+--- src/middleware.ts:0-18 ---
+export { redux } from './middleware/redux.ts'
+export {
+  devtools,
+  type DevtoolsOptions,
+  type NamedSet,
+} from './middleware/devtools.ts'
+export { subscribeWithSelector } from './middleware/subscribeWithSelector.ts'
+export { combine } from './middleware/combine.ts'
+export {
+  persist,
+  createJSONStorage,
+  type StateStorage,
+  type StorageValue,
+  type PersistStorage,
+  type PersistOptions,
+} from './middleware/persist.ts'
+export { ssrSafe as unstable_ssrSafe } from './middleware/ssrSafe.ts'
+
+
+--- docs/reference/integrations/persisting-store-data.md:744-758 ---
+export const withStorageDOMEvents = (store: StoreWithPersist) => {
+  const storageEventCallback = (e: StorageEvent) => {
+    if (e.key === store.persist.getOptions().name && e.newValue) {
+      store.persist.rehydrate()
+    }
+  }
+
+  window.addEventListener('storage', storageEventCallback)
+
+  return () => {
+    window.removeEventListener('storage', storageEventCallback)
+  }
+}
+
+
+--- src/middleware/persist.ts:124-147 ---
+type StorePersist<S, Ps, Pr> = S extends {
+  getState: () => infer T
+  setState: {
+    // capture both overloads of setState
+    (...args: infer Sa1): infer Sr1
+    (...args: infer Sa2): infer Sr2
+  }
+}
+  ? {
+      setState(...args: Sa1): Sr1 | Pr
+      setState(...args: Sa2): Sr2 | Pr
+      persist: {
+        setOptions: (options: Partial<PersistOptions<T, Ps, Pr>>) => void
+        clearStorage: () => void
+        rehydrate: () => Promise<void> | void
+        hasHydrated: () => boolean
+        onHydrate: (fn: PersistListener<T>) => () => void
+        onFinishHydration: (fn: PersistListener<T>) => () => void
+        getOptions: () => Partial<PersistOptions<T, Ps, Pr>>
+      }
+    }
+  : never
+
+
+--- docs/reference/middlewares/persist.md:0-12 ---
+---
+title: persist
+description: How to persist a store
+nav: 28
+---
+
+# persist
+
+`persist` middleware lets you persist a store's state across page reloads or application
+restarts.
+
+```js
+
+--- docs/reference/integrations/persisting-store-data.md:134-158 ---
+export const useBoundStore = create(
+  persist(
+    (set, get) => ({
+      foo: 0,
+      bar: 1,
+    }),
+    {
+      // ...
+      partialize: (state) => ({ foo: state.foo }),
+    },
+  ),
+)
+```
+
+### `onRehydrateStorage`
+
+> Type: `(state: Object) => ((state?: Object, error?: Error) => void) | void`
+
+This option enables you to pass a listener function
+that will be called when the storage is hydrated.
+
+Example:
+
+```ts
+
+--- docs/reference/migrations/migrating-to-v5.md:186-203 ---
+const args = [{ bears: 5 }, replaceFlag] as Parameters<
+  typeof useBearStore.setState
+>
+store.setState(...args)
+```
+
+#### Persist middleware no longer stores item at store creation
+
+Previously, the `persist` middleware stored the initial state during store creation. This behavior has been removed in v5 (and v4.5.5).
+
+For example, in the following code, the initial state is stored in the storage.
+
+```js
+// v4
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+
+
+--- README.md:285-299 ---
+const clearForest = useLushStore((state) => state.clearForest)
+clearForest()
+```
+
+[Alternatively, there are some other solutions.](./docs/learn/guides/updating-state.md#with-immer)
+
+## Persist middleware
+
+You can persist your store's data using any kind of storage.
+
+```jsx
+import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
+
+
+--- docs/reference/integrations/persisting-store-data.md:589-627 ---
+const useBoundStore = create(
+  persist(
+    (set, get) => ({
+      // ...
+      _hasHydrated: false,
+      setHasHydrated: (state) => {
+        set({
+          _hasHydrated: state
+        });
+      }
+    }),
+    {
+      // ...
+      onRehydrateStorage: (state) => {
+        return () => state.setHasHydrated(true)
+      }
+    }
+  )
+);
+
+export default function App() {
+  const hasHydrated = useBoundStore(state => state._hasHydrated);
+
+  if (!hasHydrated) {
+    return <p>Loading...</p>
+  }
+
+  return (
+    // ...
+  );
+}
+```
+
+You can also create a custom `useHydration` hook:
+
+```ts
+const useBoundStore = create(persist(...))
+
+
+--- docs/learn/guides/beginner-typescript.md:245-268 ---
+export const useBearStore = create<BearState>()(
+  devtools((set) => ({
+    bears: 0,
+    increase: () => set((s) => ({ bears: s.bears + 1 })),
+  })),
+)
+```
+
+#### `persist` middleware
+
+This middleware keeps your store in `localStorage` (or another storage). This means your bears survive a page refresh.
+Great for apps where persistence matters. In TS, the state type stays consistent, so no runtime surprises.
+See the [API documentation](../../reference/middlewares/persist.md) for more details.
+
+```ts
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+
+interface BearState {
+  bears: number
+  increase: () => void
+}
+
+
+--- src/middleware/persist.ts:377-404 ---
+type Persist = <
+  T,
+  Mps extends [StoreMutatorIdentifier, unknown][] = [],
+  Mcs extends [StoreMutatorIdentifier, unknown][] = [],
+  U = T,
+>(
+  initializer: StateCreator<T, [...Mps, ['zustand/persist', unknown]], Mcs>,
+  options: PersistOptions<T, U>,
+) => StateCreator<T, Mps, [['zustand/persist', U], ...Mcs]>
+
+declare module '../vanilla' {
+  interface StoreMutators<S, A> {
+    'zustand/persist': WithPersist<S, A>
+  }
+}
+
+type Write<T, U> = Omit<T, keyof U> & U
+
+type WithPersist<S, A> = Write<S, StorePersist<S, A, unknown>>
+
+type PersistImpl = <T>(
+  storeInitializer: StateCreator<T, [], []>,
+  options: PersistOptions<T, T>,
+) => StateCreator<T, [], []>
+
+export const persist = persistImpl as unknown as Persist
+
+
+--- docs/reference/integrations/persisting-store-data.md:0-23 ---
+---
+title: Persisting store data
+nav: 34
+---
+
+The Persist middleware enables you to store
+your Zustand state in a storage
+(e.g., `localStorage`, `AsyncStorage`, `IndexedDB`, etc.),
+thus persisting its data.
+
+Note that this middleware supports both
+synchronous storages, like `localStorage`,
+and asynchronous storages, like `AsyncStorage`,
+but using an asynchronous storage does come with a cost.
+See [Hydration and asynchronous storages](#hydration-and-asynchronous-storages)
+for more details.
+
+## Simple example
+
+```ts
+import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
+
+
+--- docs/reference/migrations/migrating-to-v5.md:203-222 ---
+const useCountStore = create(
+  persist(
+    () => ({
+      count: Math.floor(Math.random() * 1000),
+    }),
+    {
+      name: 'count',
+    },
+  ),
+)
+```
+
+In v5, this is no longer the case, and you need to explicitly set the state after store creation.
+
+```js
+// v5
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+
+
+--- docs/reference/middlewares/persist.md:972-1003 ---
+const render: Parameters<typeof positionStore.subscribe>[0] = (state) => {
+  $dot.style.transform = `translate(${state.position.x}px, ${state.position.y}px)`
+}
+
+setTimeout(() => {
+  positionStore.persist.rehydrate()
+}, 2000)
+
+render(positionStore.getState(), positionStore.getState())
+
+positionStore.subscribe(render)
+```
+
+Here's the `html` code
+
+```html
+<div
+  id="dot-container"
+  style="position: relative; width: 100vw; height: 100vh;"
+>
+  <div
+    id="dot"
+    style="position: absolute; background-color: red; border-radius: 50%; left: -10px; top: -10px; width: 20px; height: 20px;"
+  ></div>
+</div>
+```
+
+## Troubleshooting
+
+TBD
+
+
+--- docs/reference/integrations/persisting-store-data.md:270-302 ---
+export const useBoundStore = create(
+  persist(
+    (set, get) => ({
+      foo: {
+        bar: 0,
+        baz: 1,
+      },
+    }),
+    {
+      // ...
+      merge: (persistedState, currentState) =>
+        deepMerge(currentState, persistedState),
+    },
+  ),
+)
+```
+
+### `skipHydration`
+
+> Type: `boolean | undefined`
+
+> Default: `undefined`
+
+By default the store will be hydrated on initialization.
+
+In some applications you may need to control when the first hydration occurs.
+For example, in server-rendered apps.
+
+If you set `skipHydration`, the initial call for hydration isn't called,
+and it is left up to you to manually call `rehydrate()`.
+
+```ts
+
+--- docs/learn/guides/advanced-typescript.md:191-217 ---
+const useBearStore = create<BearState>()(
+  devtools(
+    persist(
+      (set) => ({
+        bears: 0,
+        increase: (by) => set((state) => ({ bears: state.bears + by })),
+      }),
+      { name: 'bearStore' },
+    ),
+  ),
+)
+```
+
+Just make sure you are using them immediately inside `create` so as to make the contextual inference work. Doing something even remotely fancy like the following `myMiddlewares` would require more advanced types.
+
+```ts
+import { create } from 'zustand'
+import { devtools, persist } from 'zustand/middleware'
+
+const myMiddlewares = (f) => devtools(persist(f, { name: 'bearStore' }))
+
+interface BearState {
+  bears: number
+  increase: (by: number) => void
+}
+
+
+--- docs/reference/middlewares/persist.md:401-424 ---
+const searchParamsStorage = {
+  getItem: (key: string) => getSearchParam(key),
+  setItem: (key: string, value: string) => updateSearchParam(key, value),
+  removeItem: (key: string) => removeSearchParam(key),
+}
+```
+
+Now, we initialize the vanilla store using the `persist` middleware, specifying that we want to use
+our custom storage. Instead of the default `localStorage` or `sessionStorage`, we’ll persist the
+position data in the URL search parameters.
+
+```ts
+import { createStore } from 'zustand/vanilla'
+import { persist, createJSONStorage } from 'zustand/middleware'
+
+type PositionStoreState = { position: { x: number; y: number } }
+
+type PositionStoreActions = {
+  setPosition: (nextPosition: PositionStoreState['position']) => void
+}
+
+type PositionStore = PositionStoreState & PositionStoreActions
+
+
+--- docs/learn/guides/slices-pattern.md:85-104 ---
+export const useBoundStore = create((...a) => ({
+  ...createBearSlice(...a),
+  ...createFishSlice(...a),
+  ...createBearFishSlice(...a),
+}))
+```
+
+## Adding middlewares
+
+Adding middlewares to a combined store is the same as with other normal stores.
+
+Adding [`persist` middleware](../../reference/integrations/persisting-store-data.md) to our `useBoundStore`:
+
+```js
+import { create } from 'zustand'
+import { createBearSlice } from './bearSlice'
+import { createFishSlice } from './fishSlice'
+import { persist } from 'zustand/middleware'
+
+
+--- docs/reference/integrations/persisting-store-data.md:758-776 ---
+const useBoundStore = create(persist(...))
+withStorageDOMEvents(useBoundStore)
+```
+
+### How do I use it with TypeScript
+
+Basic typescript usage doesn't require anything special
+except for writing `create<State>()(...)` instead of `create(...)`.
+
+```tsx
+import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
+
+interface MyState {
+  bears: number
+  addABear: () => void
+}
+
+
+--- README.md:299-323 ---
+const useFishStore = create(
+  persist(
+    (set, get) => ({
+      fishes: 0,
+      addAFish: () => set({ fishes: get().fishes + 1 }),
+    }),
+    {
+      name: 'food-storage', // name of the item in the storage (must be unique)
+      storage: createJSONStorage(() => sessionStorage), // (optional) by default, 'localStorage' is used
+    },
+  ),
+)
+```
+
+[See the full documentation for this middleware.](./docs/reference/integrations/persisting-store-data.md)
+
+## Immer middleware
+
+Immer is available as middleware too.
+
+```jsx
+import { create } from 'zustand'
+import { immer } from 'zustand/middleware/immer'
+
+
+--- docs/learn/guides/connect-to-state-with-url-hash.md:0-13 ---
+---
+title: Connect to state with URL
+nav: 10
+---
+
+## Connect State with URL Hash
+
+If you want to connect state of a store to URL hash, you can create your own hash storage.
+
+```ts
+import { create } from 'zustand'
+import { persist, StateStorage, createJSONStorage } from 'zustand/middleware'
+
+
+--- docs/reference/integrations/immer-middleware.md:0-38 ---
+---
+title: Immer middleware
+nav: 35
+---
+
+The [Immer](https://github.com/immerjs/immer) middleware enables you
+to use immutable state in a more convenient way.
+Also, with Immer, you can simplify handling
+immutable data structures in Zustand.
+
+## Installation
+
+In order to use the Immer middleware in Zustand,
+you will need to install Immer as a direct dependency.
+
+```bash
+npm install immer
+```
+
+## Usage
+
+(Notice the extra parentheses after the type parameter as mentioned in the [Advanced Typescript Guide](../../learn/guides/advanced-typescript.md)).
+
+Updating simple states
+
+```ts
+import { create } from 'zustand'
+import { immer } from 'zustand/middleware/immer'
+
+type State = {
+  count: number
+}
+
+type Actions = {
+  increment: (qty: number) => void
+  decrement: (qty: number) => void
+}
+
+
+--- docs/learn/guides/advanced-typescript.md:171-191 ---
+const useBearStore = create(
+  combine({ bears: 0 }, (set) => ({
+    increase: (by: number) => set((state) => ({ bears: state.bears + by })),
+  })),
+)
+```
+
+## Using middlewares
+
+You do not have to do anything special to use middlewares in TypeScript.
+
+```ts
+import { create } from 'zustand'
+import { devtools, persist } from 'zustand/middleware'
+
+interface BearState {
+  bears: number
+  increase: (by: number) => void
+}
+
+
+--- docs/reference/integrations/persisting-store-data.md:23-48 ---
+export const useBearStore = create()(
+  persist(
+    (set, get) => ({
+      bears: 0,
+      addABear: () => set({ bears: get().bears + 1 }),
+    }),
+    {
+      name: 'food-storage', // name of the item in the storage (must be unique)
+      storage: createJSONStorage(() => sessionStorage), // (optional) by default, 'localStorage' is used
+    },
+  ),
+)
+```
+
+## Typescript simple example
+
+```ts
+import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
+
+type BearStore = {
+  bears: number
+  addABear: () => void
+}
+
+
+--- docs/reference/middlewares/persist.md:779-795 ---
+const render: Parameters<typeof positionStore.subscribe>[0] = (state) => {
+  $dot.style.transform = `translate(${state.position.x}px, ${state.position.y}px)`
+}
+
+render(positionStore.getState(), positionStore.getState())
+
+positionStore.subscribe(render)
+```
+
+Here’s the complete code.
+
+```ts
+import { createStore } from 'zustand/vanilla'
+import { persist } from 'zustand/middleware'
+import createDeepMerge from '@fastify/deepmerge'
+
+
+--- docs/learn/guides/connect-to-state-with-url-hash.md:31-63 ---
+export const useBoundStore = create()(
+  persist(
+    (set, get) => ({
+      fishes: 0,
+      addAFish: () => set({ fishes: get().fishes + 1 }),
+    }),
+    {
+      name: 'food-storage', // unique name
+      storage: createJSONStorage(() => hashStorage),
+    },
+  ),
+)
+```
+
+## Persist and Connect State with URL Parameters (Example: URL Query Parameters)
+
+There are times when you want to conditionally connect the state to the URL.
+This example depicts usage of the URL query parameters
+while keeping it synced with another persistence implementation, like `localstorage`.
+
+If you want the URL params to always populate, the conditional check on `getUrlSearch()` can be removed.
+
+The implementation below will update the URL in place, without refresh, as the relevant states change.
+
+```ts
+import { create } from 'zustand'
+import { persist, StateStorage, createJSONStorage } from 'zustand/middleware'
+
+const getUrlSearch = () => {
+  return window.location.search.slice(1)
+}
+
+
+--- README.md:460-480 ---
+const Component = () => {
+  const store = useContext(StoreContext)
+  const slice = useStore(store, selector)
+  ...
+```
+
+## TypeScript Usage
+
+Basic typescript usage doesn't require anything special except for writing `create<State>()(...)` instead of `create(...)`...
+
+```ts
+import { create } from 'zustand'
+import { devtools, persist } from 'zustand/middleware'
+import type {} from '@redux-devtools/extension' // required for devtools typing
+
+interface BearState {
+  bears: number
+  increase: (by: number) => void
+}
+
+
+--- docs/reference/middlewares/persist.md:265-281 ---
+const render: Parameters<typeof positionStore.subscribe>[0] = (state) => {
+  $dot.style.transform = `translate(${state.context.position.x}px, ${state.context.position.y}px)`
+}
+
+render(positionStore.getState(), positionStore.getState())
+
+positionStore.subscribe(render)
+```
+
+Here’s the full code to create a dot that follows your mouse movement inside a container and
+persists the `context` in `localStorage`.
+
+```ts
+import { createStore } from 'zustand/vanilla'
+import { persist } from 'zustand/middleware'
+
+
+--- docs/reference/integrations/persisting-store-data.md:529-555 ---
+const useStore = <T, F>(
+  store: (callback: (state: T) => unknown) => unknown,
+  callback: (state: T) => F,
+) => {
+  const result = store(callback) as F
+  const [data, setData] = useState<F>()
+
+  useEffect(() => {
+    setData(result)
+  }, [result])
+
+  return data
+}
+
+export default useStore
+```
+
+Now in your pages, you will use the hook a little bit differently:
+
+```ts
+// useBearStore.ts
+
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+
+// the store itself does not need any change
+
+--- docs/reference/middlewares/persist.md:132-155 ---
+const render: Parameters<typeof positionStore.subscribe>[0] = (state) => {
+  $dot.style.transform = `translate(${state.position.x}px, ${state.position.y}px)`
+}
+
+render(positionStore.getState(), positionStore.getState())
+
+positionStore.subscribe(render)
+```
+
+Here’s the complete code.
+
+```ts
+import { createStore } from 'zustand/vanilla'
+import { persist } from 'zustand/middleware'
+
+type PositionStoreState = { position: { x: number; y: number } }
+
+type PositionStoreActions = {
+  setPosition: (nextPosition: PositionStoreState['position']) => void
+}
+
+type PositionStore = PositionStoreState & PositionStoreActions
+
+
+--- docs/reference/middlewares/persist.md:926-949 ---
+const render: Parameters<typeof positionStore.subscribe>[0] = (state) => {
+  $dot.style.transform = `translate(${state.position.x}px, ${state.position.y}px)`
+}
+
+render(positionStore.getState(), positionStore.getState())
+
+positionStore.subscribe(render)
+```
+
+Here’s the complete code.
+
+```ts
+import { createStore } from 'zustand/vanilla'
+import { persist } from 'zustand/middleware'
+
+type PositionStoreState = { position: { x: number; y: number } }
+
+type PositionStoreActions = {
+  setPosition: (nextPosition: PositionStoreState['position']) => void
+}
+
+type PositionStore = PositionStoreState & PositionStoreActions
+
+
+--- src/middleware/persist.ts:346-377 ---
+    },
+    clearStorage: () => {
+      ++hydrationVersion
+      storage?.removeItem(options.name)
+    },
+    getOptions: () => options,
+    rehydrate: () => hydrate() as Promise<void>,
+    hasHydrated: () => hasHydrated,
+    onHydrate: (cb) => {
+      hydrationListeners.add(cb)
+
+      return () => {
+        hydrationListeners.delete(cb)
+      }
+    },
+    onFinishHydration: (cb) => {
+      finishHydrationListeners.add(cb)
+
+      return () => {
+        finishHydrationListeners.delete(cb)
+      }
+    },
+  }
+
+  if (!options.skipHydration) {
+    hydrate()
+  }
+
+  return stateFromStorage || configResult
+}
+
+
+--- docs/learn/guides/advanced-typescript.md:400-417 ---
+const useBearStore = create<
+  BearState,
+  [
+    ['zustand/persist', BearState],
+    ['zustand/devtools', never]
+  ]
+>(devtools(persist((set) => ({
+  bears: 0,
+  increase: (by) => set((state) => ({ bears: state.bears + by })),
+}), { name: 'bearStore' }))
+```
+
+### Slices pattern
+
+```ts
+import { create, StateCreator } from 'zustand'
+
+
+--- docs/learn/guides/beginner-typescript.md:223-245 ---
+export const useBearStore = create<BearState>()(
+  combine({ bears: 0 }, (set) => ({
+    increase: () => set((s) => ({ bears: s.bears + 1 })),
+  })),
+)
+```
+
+#### `devtools` middleware
+
+This middleware connects Zustand to Redux DevTools. You can inspect changes, time-travel, and debug state.
+It’s extremely useful in development. TS ensures your actions and state remain type-checked even here.
+See the [API documentation](../../reference/middlewares/devtools.md) for more details.
+
+```ts
+import { create } from 'zustand'
+import { devtools } from 'zustand/middleware'
+
+interface BearState {
+  bears: number
+  increase: () => void
+}
+
+
+--- README.md:353-362 ---
+const dispatch = useGrumpyStore((state) => state.dispatch)
+dispatch({ type: types.increase, by: 2 })
+```
+
+Or, just use our redux-middleware. It wires up your main-reducer, sets the initial state, and adds a dispatch function to the state itself and the vanilla API.
+
+```jsx
+import { redux } from 'zustand/middleware'
+
+
+--- src/middleware/ssrSafe.ts:0-5 ---
+import type { StateCreator, StoreMutatorIdentifier } from '../vanilla.ts'
+
+// This is experimental middleware. It will be changed before finalizing it.
+// https://github.com/pmndrs/zustand/discussions/2740
+// TODO Not very happy with the middleware name. Will revisit it later.
+
+--- docs/reference/middlewares/combine.md:0-17 ---
+---
+title: combine
+description: How to create a store and get types automatically inferred
+nav: 32
+---
+
+# combine
+
+`combine` middleware lets you create a cohesive state by merging an initial state with a state
+creator function that adds new state slices and actions. This is really helpful as it automatically
+infers types, so there’s no need for explicit type definitions.
+
+> [!TIP]
+> This makes state management more straightforward and efficient by making curried version of
+> `create` and `createStore` not necessary for middleware usage.
+
+```js
+
+--- README.md:362-375 ---
+const useGrumpyStore = create(redux(reducer, initialState))
+```
+
+## Redux devtools
+
+Install the [Redux DevTools Chrome extension](https://chromewebstore.google.com/detail/redux-devtools/lmhkpmbekcpmknklioeibfkpmmfibljd) to use the devtools middleware.
+
+```jsx
+import { devtools } from 'zustand/middleware'
+
+// Usage with a plain action store, it will log actions as "setState"
+const usePlainStore = create(devtools((set) => ...))
+// Usage with a redux store, it will log full action types
+
+--- docs/reference/middlewares/immer.md:0-15 ---
+---
+title: immer
+description: How to perform immutable updates in a store without boilerplate code
+nav: 31
+---
+
+# immer
+
+`immer` middleware lets you perform immutable updates.
+
+> [!IMPORTANT]
+> In order to use `immer` from `zustand/middleware/immer` you need to install
+> `immer` library.
+
+```js
+
+--- docs/reference/integrations/persisting-store-data.md:114-134 ---
+export const useBoundStore = create(
+  persist(
+    (set, get) => ({
+      foo: 0,
+      bar: 1,
+    }),
+    {
+      // ...
+      partialize: (state) =>
+        Object.fromEntries(
+          Object.entries(state).filter(([key]) => !['foo'].includes(key)),
+        ),
+    },
+  ),
+)
+```
+
+Or you could allow only specific fields using the following:
+
+```ts
+
+--- docs/reference/integrations/persisting-store-data.md:416-433 ---
+const unsub = useBoundStore.persist.onHydrate((state) => {
+  console.log('hydration starts')
+})
+
+// later on...
+unsub()
+```
+
+### `onFinishHydration`
+
+> Type: `(listener: (state) => void) => () => void`
+
+> Returns: Unsubscribe function
+
+This listener will be called when the hydration process ends.
+
+```ts
+
+--- docs/reference/integrations/immer-middleware.md:38-59 ---
+export const useCountStore = create<State & Actions>()(
+  immer((set) => ({
+    count: 0,
+    increment: (qty: number) =>
+      set((state) => {
+        state.count += qty
+      }),
+    decrement: (qty: number) =>
+      set((state) => {
+        state.count -= qty
+      }),
+  })),
+)
+```
+
+Updating complex states
+
+```ts
+import { create } from 'zustand'
+import { immer } from 'zustand/middleware/immer'
+
+
+--- docs/reference/migrations/migrating-to-v5.md:222-242 ---
+const useCountStore = create(
+  persist(
+    () => ({
+      count: 0,
+    }),
+    {
+      name: 'count',
+    },
+  ),
+)
+useCountStore.setState({
+  count: Math.floor(Math.random() * 1000),
+})
+```
+
+## Links
+
+- https://github.com/pmndrs/zustand/pull/2138
+- https://github.com/pmndrs/zustand/pull/2580
+
+
+--- docs/learn/guides/advanced-typescript.md:324-346 ---
+const useBearStore = create<BearState>()(
+  logger(
+    (set) => ({
+      bears: 0,
+      increase: (by) => set((state) => ({ bears: state.bears + by })),
+    }),
+    'bear-store',
+  ),
+)
+```
+
+### Middleware that changes the store type
+
+```ts
+import {
+  create,
+  StateCreator,
+  StoreMutatorIdentifier,
+  Mutate,
+  StoreApi,
+} from 'zustand'
+
+
+--- docs/reference/middlewares/subscribe-with-selector.md:0-11 ---
+---
+title: subscribeWithSelector
+description: How to subscribe to granular store updates in a store
+nav: 33
+---
+
+# subscribeWithSelector
+
+`subscribeWithSelector` middleware lets you subscribe to specific data based on current state.
+
+```js
+
+--- docs/reference/integrations/persisting-store-data.md:90-114 ---
+export const useBoundStore = create(
+  persist(
+    (set, get) => ({
+      // ...
+    }),
+    {
+      // ...
+      storage: createJSONStorage(() => AsyncStorage),
+    },
+  ),
+)
+```
+
+### `partialize`
+
+> Type: `(state: Object) => Object`
+
+> Default: `(state) => state`
+
+Enables you to pick some of the state's fields to be stored in the storage.
+
+You could omit multiple fields using the following:
+
+```ts
+
+--- docs/reference/middlewares/persist.md:297-315 ---
+const positionStore = createStore<PositionStore>()(
+  persist(
+    (set) => ({
+      context: {
+        position: { x: 0, y: 0 },
+      },
+      actions: {
+        setPosition: (position) => set({ context: { position } }),
+      },
+    }),
+    {
+      name: 'position-storage',
+      partialize: (state) => ({ context: state.context }),
+    },
+  ),
+)
+
+const $dotContainer = document.getElementById('dot-container') as HTMLDivElement
+
+--- docs/reference/middlewares/devtools.md:0-16 ---
+---
+title: devtools
+description: How to time-travel debug your store
+nav: 29
+---
+
+# devtools
+
+`devtools` middleware lets you use [Redux DevTools Extension](https://github.com/reduxjs/redux-devtools)
+without Redux. Read more about the benefits of using [Redux DevTools for debugging](https://redux.js.org/style-guide/#use-the-redux-devtools-extension-for-debugging).
+
+> [!IMPORTANT]
+> In order to use `devtools` from `zustand/middleware` you need to install
+> `@redux-devtools/extension` library.
+
+```js
+
+--- docs/reference/integrations/persisting-store-data.md:302-319 ---
+export const useBoundStore = create(
+  persist(
+    () => ({
+      count: 0,
+      // ...
+    }),
+    {
+      // ...
+      skipHydration: true,
+    },
+  ),
+)
+```
+
+```tsx
+import { useBoundStore } from './path-to-store';
+
+
+--- docs/reference/middlewares/redux.md:0-11 ---
+---
+title: redux
+description: How to use actions and reducers in a store
+nav: 30
+---
+
+# redux
+
+`redux` middleware lets you update a store through actions and reducers just like redux.
+
+```js
+
+--- docs/reference/integrations/persisting-store-data.md:703-715 ---
+const storage: PersistStorage<BearState> = {
+  getItem: (name) => {
+    const str = localStorage.getItem(name)
+    if (!str) return null
+    return superjson.parse(str)
+  },
+  setItem: (name, value) => {
+    localStorage.setItem(name, superjson.stringify(value))
+  },
+  removeItem: (name) => localStorage.removeItem(name),
+}
+
+
+--- docs/learn/guides/advanced-typescript.md:277-292 ---
+const args = [{ bears: 5 }, replaceFlag] as Parameters<
+  typeof useBearStore.setState
+>
+useBearStore.setState(...args) // Using the workaround
+```
+
+By following this approach, you can ensure that your code handles dynamic `replace` flags without encountering type issues.
+
+## Common recipes
+
+### Middleware that doesn't change the store type
+
+```ts
+import { create, StateCreator, StoreMutatorIdentifier } from 'zustand'
+
+
+--- docs/reference/middlewares/persist.md:155-166 ---
+const positionStore = createStore<PositionStore>()(
+  persist(
+    (set) => ({
+      position: { x: 0, y: 0 },
+      setPosition: (position) => set({ position }),
+    }),
+    { name: 'position-storage' },
+  ),
+)
+
+const $dotContainer = document.getElementById('dot-container') as HTMLDivElement
+
+--- docs/reference/middlewares/persist.md:949-963 ---
+const positionStore = createStore<PositionStore>()(
+  persist(
+    (set) => ({
+      position: { x: 0, y: 0 },
+      setPosition: (position) => set({ position }),
+    }),
+    {
+      name: 'position-storage',
+      skipHydration: true,
+    },
+  ),
+)
+
+const $dotContainer = document.getElementById('dot-container') as HTMLDivElement
+
+--- src/middleware/devtools.ts:425-438 ---
+const parseJsonThen = <T>(stringified: string, fn: (parsed: T) => void) => {
+  let parsed: T | undefined
+  try {
+    parsed = JSON.parse(stringified)
+  } catch (e) {
+    console.error(
+      '[zustand devtools middleware] Could not parse the received json',
+      e,
+    )
+  }
+  if (parsed !== undefined) fn(parsed as T)
+}
+
+
+--- docs/reference/integrations/persisting-store-data.md:555-574 ---
+export const useBearStore = create(
+  persist(
+    (set, get) => ({
+      bears: 0,
+      addABear: () => set({ bears: get().bears + 1 }),
+    }),
+    {
+      name: 'food-storage',
+    },
+  ),
+)
+```
+
+```ts
+// yourComponent.tsx
+
+import useStore from './useStore'
+import { useBearStore } from './stores/useBearStore'
+
+
+--- docs/reference/middlewares/persist.md:517-531 ---
+const positionStore = createStore<PositionStore>()(
+  persist(
+    (set) => ({
+      position: { x: 0, y: 0 },
+      setPosition: (position) => set({ position }),
+    }),
+    {
+      name: 'position-storage',
+      storage: createJSONStorage(() => searchParamsStorage),
+    },
+  ),
+)
+
+const $dotContainer = document.getElementById('dot-container') as HTMLDivElement
+
+--- docs/reference/middlewares/persist.md:816-830 ---
+const positionStore = createStore<PositionStore>()(
+  persist(
+    (set) => ({
+      position: { x: 0, y: 0 },
+      setPosition: (position) => set({ position }),
+    }),
+    {
+      name: 'position-storage',
+      merge: (persisted, current) => deepMerge(current, persisted) as never,
+    },
+  ),
+)
+
+const $dotContainer = document.getElementById('dot-container') as HTMLDivElement
+
+--- docs/learn/guides/tutorial-tic-tac-toe.md:1002-1015 ---
+function handlePlay(nextSquares) {
+  setHistory(history.concat([nextSquares]))
+  setXIsNext(!xIsNext)
+}
+```
+
+At this point, you've moved the state to live in the `Game` component, and the UI should be fully
+working, just as it was before the refactor. Here is what the code should look like at this point:
+
+```jsx
+import { create } from 'zustand'
+import { combine } from 'zustand/middleware'
+
+
+--- docs/reference/middlewares/persist.md:103-118 ---
+const positionStore = createStore<PositionStore>()(
+  persist(
+    (set) => ({
+      position: { x: 0, y: 0 },
+      setPosition: (position) => set({ position }),
+    }),
+    { name: 'position-storage' },
+  ),
+)
+```
+
+Next, we'll track the mouse movements inside a div and update the store with the new position.
+
+```ts
+const $dotContainer = document.getElementById('dot-container') as HTMLDivElement
+
+--- src/middleware/persist.ts:17-30 ---
+export interface PersistStorage<S, R = unknown> {
+  getItem: (
+    name: string,
+  ) => StorageValue<S> | null | Promise<StorageValue<S> | null>
+  setItem: (name: string, value: StorageValue<S>) => R
+  removeItem: (name: string) => R
+}
+
+type JsonStorageOptions = {
+  reviver?: (key: string, value: unknown) => unknown
+  replacer?: (key: string, value: unknown) => unknown
+}
+
+
+--- docs/learn/guides/beginner-typescript.md:217-223 ---
+interface BearState {
+  bears: number
+  increase: () => void
+}
+
+// State + actions are separated
+
+--- docs/reference/middlewares/persist.md:213-219 ---
+type PositionStoreState = {
+  context: {
+    position: { x: number; y: number }
+  }
+}
+
+
+--- docs/reference/middlewares/persist.md:281-287 ---
+type PositionStoreState = {
+  context: {
+    position: { x: number; y: number }
+  }
+}
+
+
+--- src/middleware/subscribeWithSelector.ts:0-2 ---
+import type { StateCreator, StoreMutatorIdentifier } from '../vanilla.ts'
+
+
+--- src/middleware/persist.ts:0-6 ---
+import type {
+  StateCreator,
+  StoreApi,
+  StoreMutatorIdentifier,
+} from '../vanilla.ts'

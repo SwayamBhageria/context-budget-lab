@@ -1,0 +1,1158 @@
+QUESTION: how does revalidation on focus work?
+
+--- src/_internal/types.ts:179-259 ---
+export interface PublicConfiguration<
+  Data = any,
+  Error = any,
+  Fn extends Fetcher = BareFetcher
+> {
+  /**
+   *  error retry interval in milliseconds
+   *  @defaultValue 5000
+   */
+  errorRetryInterval: number
+  /** max error retry count */
+  errorRetryCount?: number
+  /**
+   * timeout to trigger the onLoadingSlow event in milliseconds
+   * @defaultValue 3000
+   */
+  loadingTimeout: number
+  /**
+   * only revalidate once during a time span in milliseconds
+   * @defaultValue 5000
+   */
+  focusThrottleInterval: number
+  /**
+   * dedupe requests with the same key in this time span in milliseconds
+   * @defaultValue 2000
+   */
+  dedupingInterval: number
+  /**
+   *  * Disabled by default: `refreshInterval = 0`
+   *  * If set to a number, polling interval in milliseconds
+   *  * If set to a function, the function will receive the latest data and should return the interval in milliseconds
+   *  @see {@link https://swr.vercel.app/docs/revalidation}
+   */
+  refreshInterval?: number | ((latestData: Data | undefined) => number)
+  /**
+   * polling when the window is invisible (if `refreshInterval` is enabled)
+   * @defaultValue false
+   */
+  refreshWhenHidden?: boolean
+  /**
+   * polling when the browser is offline (determined by `navigator.onLine`)
+   *
+   * When enabled, SWR will continue polling even when the browser is offline.
+   * This can be useful for applications that need to check for connectivity
+   * or cache updates while offline.
+   *
+   * @defaultValue false
+   */
+  refreshWhenOffline?: boolean
+  /**
+   * automatically revalidate when window gets focused
+   *
+   * When enabled, SWR will automatically revalidate data when the user
+   * returns focus to the window/tab. This ensures data freshness when
+   * users switch between applications.
+   *
+   * @defaultValue true
+   * @see {@link https://swr.vercel.app/docs/revalidation | Revalidation Documentation}
+   */
+  revalidateOnFocus: boolean
+  /**
+   * automatically revalidate when the browser regains a network connection (via `navigator.onLine`)
+   *
+   * When enabled, SWR will automatically revalidate data when the browser
+   * goes from offline to online state, ensuring data is up-to-date when
+   * connectivity is restored.
+   *
+   * @defaultValue true
+   * @see {@link https://swr.vercel.app/docs/revalidation | Revalidation Documentation}
+   */
+  revalidateOnReconnect: boolean
+  /**
+   * enable or disable automatic revalidation when component is mounted
+   *
+   * Controls whether SWR should automatically fetch data when the component
+   * mounts. When `undefined`, the behavior depends on `revalidateIfStale`.
+   *
+   * @defaultValue undefined (inherits from revalidateIfStale)
+   */
+  revalidateOnMount?: boolean
+
+--- src/_internal/types.ts:339-363 ---
+    config: Readonly<PublicConfiguration<Data, Error, Fn>>,
+    revalidate: Revalidator,
+    revalidateOpts: Required<RevalidatorOptions>
+  ) => void
+  /**
+   * callback function when a request is ignored due to race conditions
+   */
+  onDiscarded: (key: string) => void
+  /**
+   * Comparison function used to detect when returned data has changed, to avoid spurious rerenders. By default, [dequal](https://github.com/lukeed/dequal) is used.
+   */
+  compare: (a: Data | undefined, b: Data | undefined) => boolean
+  /**
+   * IsOnline and isVisible are functions that return a boolean, to determine if the application is "active". By default, SWR will bail out a revalidation if these conditions are not met.
+   * @see {@link https://swr.vercel.app/docs/advanced/react-native#customize-focus-and-reconnect-events}
+   */
+  isOnline: () => boolean
+  /**
+   * IsOnline and isVisible are functions that return a boolean, to determine if the application is "active". By default, SWR will bail out a revalidation if these conditions are not met.
+   * @see {@link https://swr.vercel.app/docs/advanced/react-native#customize-focus-and-reconnect-events}
+   */
+  isVisible: () => boolean
+}
+
+
+--- src/index/use-swr.ts:741-821 ---
+      setCache({ data: preloaded.data, error: UNDEFINED, _k: preloaded._k })
+    }
+    if (PRELOAD[preloaded.key]) {
+      delete PRELOAD[preloaded.key]
+    }
+  })
+
+  // The logic for updating refs.
+  useIsomorphicLayoutEffect(() => {
+    fetcherRef.current = fetcher
+    configRef.current = config
+    // Handle laggy data updates. If there's cached data of the current key,
+    // it'll be the correct reference.
+    if (!isUndefined(cachedData)) {
+      laggyDataRef.current = cachedData
+    }
+  })
+
+  useIsomorphicLayoutEffect(() => {
+    if (
+      fetcher ||
+      !hasCacheData ||
+      isUndefined(preloadedData) ||
+      isCacheDataConsumed(consumedCacheData, serverCacheData, key) ||
+      !isUndefined(getCache().data)
+    ) {
+      return
+    }
+
+    markCacheDataConsumed(consumedCacheData, serverCacheData, key)
+    const mutation = MUTATION[key]
+    commitCacheData({
+      value: preloadedData,
+      getCacheData: () => getCache().data,
+      canCommit: () =>
+        !unmountedRef.current &&
+        key === keyRef.current &&
+        MUTATION[key] === mutation,
+      setCache: state => setCache({ ...state, _k: fnArg })
+    })
+  })
+
+  // After mounted or key changed.
+  useIsomorphicLayoutEffect(() => {
+    if (!key) return
+
+    const softRevalidate = revalidate.bind(UNDEFINED, WITH_DEDUPE)
+
+    let nextFocusRevalidatedAt = 0
+
+    if (getConfig().revalidateOnFocus) {
+      const initNow = Date.now()
+      nextFocusRevalidatedAt = initNow + getConfig().focusThrottleInterval
+    }
+
+    // Expose revalidators to global event listeners. So we can trigger
+    // revalidation from the outside.
+    const onRevalidate = (
+      type: RevalidateEvent,
+      opts: {
+        retryCount?: number
+        dedupe?: boolean
+        revalidate?: boolean
+      } = {}
+    ) => {
+      if (type == revalidateEvents.FOCUS_EVENT) {
+        const now = Date.now()
+        if (
+          getConfig().revalidateOnFocus &&
+          now > nextFocusRevalidatedAt &&
+          isActive()
+        ) {
+          nextFocusRevalidatedAt = now + getConfig().focusThrottleInterval
+          softRevalidate()
+        }
+      } else if (type == revalidateEvents.RECONNECT_EVENT) {
+        if (getConfig().revalidateOnReconnect && isActive()) {
+          softRevalidate()
+        }
+      } else if (type == revalidateEvents.MUTATE_EVENT) {
+
+--- src/_internal/utils/web-preset.ts:28-42 ---
+const initFocus = (callback: () => void) => {
+  // focus revalidate
+  if (isDocumentDefined) {
+    document.addEventListener('visibilitychange', callback)
+  }
+  onWindowEvent('focus', callback)
+  return () => {
+    if (isDocumentDefined) {
+      document.removeEventListener('visibilitychange', callback)
+    }
+    offWindowEvent('focus', callback)
+  }
+}
+
+
+--- src/_internal/types.ts:144-163 ---
+export interface UnloadOptions {
+  /**
+   * Whether to revalidate the keys of all mounted hooks after clearing the
+   * cache. When disabled, mounted hooks stay in the empty state until the
+   * next revalidation event (focus, reconnect, remount).
+   * @defaultValue true
+   */
+  revalidate?: boolean
+}
+
+/**
+ * Clears every entry in the cache — including the special `useSWRInfinite`
+ * and `useSWRSubscription` keys that key filters can't match — discards all
+ * in-flight requests and mutations, and notifies subscribers so mounted
+ * hooks re-render with the empty cache. Previous data kept on screen by
+ * `keepPreviousData` is dropped as well.
+ *
+ * @public
+ */
+
+--- src/_internal/utils/cache.ts:107-187 ---
+        const subs = subscriptions[key]
+        if (subs) {
+          for (const fn of subs) {
+            fn(emptyState, prev)
+          }
+        }
+      }
+
+      // The unload event runs last so the fresh requests it may start are
+      // not invalidated by the cleanup above. It always fires — even without
+      // revalidation — and to every hook on the key, so each one can drop
+      // the previous data kept by `keepPreviousData`. Only the first hook
+      // revalidates, consistent with how mutations revalidate a key.
+      const revalidate = !unloadOptions || unloadOptions.revalidate !== false
+      for (const key in EVENT_REVALIDATORS) {
+        const revalidators = EVENT_REVALIDATORS[key]
+        for (let i = 0; i < revalidators.length; i++) {
+          revalidators[i](revalidateEvents.UNLOAD_EVENT, {
+            revalidate: revalidate && !i
+          })
+        }
+      }
+    }
+
+    const initProvider = () => {
+      if (!SWRGlobalState.has(provider)) {
+        // Update the state if it's new, or if the provider has been extended.
+        SWRGlobalState.set(provider, [
+          EVENT_REVALIDATORS,
+          Object.create(null),
+          Object.create(null),
+          Object.create(null),
+          mutate,
+          setter,
+          subscribe,
+          unload,
+          0
+        ])
+        if (!IS_SERVER) {
+          // When listening to the native events for auto revalidations,
+          // we intentionally put a delay (setTimeout) here to make sure they are
+          // fired after immediate JavaScript executions, which can be
+          // React's state updates.
+          // This avoids some unnecessary revalidations such as
+          // https://github.com/vercel/swr/issues/1680.
+          const releaseFocus = opts.initFocus(
+            setTimeout.bind(
+              UNDEFINED,
+              revalidateAllKeys.bind(
+                UNDEFINED,
+                EVENT_REVALIDATORS,
+                revalidateEvents.FOCUS_EVENT
+              )
+            )
+          )
+          const releaseReconnect = opts.initReconnect(
+            setTimeout.bind(
+              UNDEFINED,
+              revalidateAllKeys.bind(
+                UNDEFINED,
+                EVENT_REVALIDATORS,
+                revalidateEvents.RECONNECT_EVENT
+              )
+            )
+          )
+          unmount = () => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            releaseFocus && releaseFocus()
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            releaseReconnect && releaseReconnect()
+            // When un-mounting, we need to remove the cache provider from the state
+            // storage too because it's a side-effect. Otherwise, when re-mounting we
+            // will not re-register those event listeners.
+            SWRGlobalState.delete(provider)
+          }
+        }
+      }
+    }
+    initProvider()
+
+
+--- src/index/use-swr.ts:901-981 ---
+    }
+
+    next()
+
+    return () => {
+      if (timer) {
+        clearTimeout(timer)
+        timer = -1
+      }
+    }
+  }, [refreshInterval, refreshWhenHidden, refreshWhenOffline, key])
+
+  // Display debug info in React DevTools.
+  useDebugValue(returnedData)
+
+  // In Suspense mode, we can't return the empty `data` state.
+  // If there is an `error`, the `error` needs to be thrown to the error boundary.
+  // If there is no `error`, the `revalidation` promise needs to be thrown to
+  // the suspense boundary.
+  if (suspense) {
+    // SWR should throw when trying to use Suspense on the server with React 18,
+    // without providing any fallback data. This causes hydration errors. See:
+    // https://github.com/vercel/swr/issues/1832
+    if (
+      !IS_REACT_LEGACY &&
+      IS_SERVER &&
+      hasKeyButNoData &&
+      isUndefined(preloadedData)
+    ) {
+      throw new Error('Fallback data is required when using Suspense in SSR.')
+    }
+
+    // Always update fetcher and config refs even with the Suspense mode.
+    if (hasKeyButNoData) {
+      fetcherRef.current = fetcher
+      configRef.current = config
+      unmountedRef.current = false
+    }
+
+    const shouldConsumePreload = !isUndefined(preloadedData) && hasKeyButNoData
+    let preloadData = UNDEFINED as Data | undefined
+
+    if (shouldConsumePreload && hasCacheData) {
+      preloadData =
+        preloadedData && isPromiseLike(preloadedData)
+          ? use(preloadedData)
+          : preloadedData
+      data = preloadData
+      returnedData = preloadData
+
+      if (!IS_SERVER) {
+        preloadCacheRef.current = {
+          data: preloadData,
+          _k: fnArg,
+          key,
+          cacheData: serverCacheData
+        }
+      }
+    } else {
+      const mutateReq = shouldConsumePreload
+        ? boundMutate(preloadedData)
+        : resolvedUndef
+      use(mutateReq)
+    }
+
+    if (!isUndefined(error) && hasKeyButNoData) {
+      throw error
+    }
+    const revalidation =
+      hasKeyButNoData && isUndefined(preloadData)
+        ? revalidate(WITH_DEDUPE)
+        : resolvedUndef
+    if (!isUndefined(returnedData) && hasKeyButNoData) {
+      // @ts-ignore modify react promise status
+      revalidation.status = 'fulfilled'
+      // @ts-ignore modify react promise value
+      revalidation.value = true
+    }
+    use(revalidation)
+  }
+
+--- src/_internal/types.ts:386-441 ---
+export type ProviderConfiguration = {
+  /**
+   * Initialize focus event listener.
+   *
+   * @param callback - Function to call when window gains focus
+   * @returns Optional cleanup function to remove the listener
+   */
+  initFocus: (callback: () => void) => (() => void) | void
+  /**
+   * Initialize reconnect event listener.
+   *
+   * @param callback - Function to call when network reconnects
+   * @returns Optional cleanup function to remove the listener
+   */
+  initReconnect: (callback: () => void) => (() => void) | void
+}
+
+/**
+ * The main useSWR hook interface with multiple overloads for different usage patterns.
+ *
+ * This interface provides type-safe overloads for various ways to call useSWR,
+ * from simple key-only calls to complex configurations with custom fetchers.
+ * The overloads ensure proper type inference for data, error, and configuration.
+ *
+ * @public
+ *
+ * @example Basic usage
+ * ```ts
+ * const { data, error } = useSWR('/api/data', fetcher)
+ * ```
+ *
+ * @example With configuration
+ * ```ts
+ * const { data, error } = useSWR('/api/data', fetcher, {
+ *   refreshInterval: 1000,
+ *   revalidateOnFocus: false
+ * })
+ * ```
+ *
+ * @example Conditional fetching
+ * ```ts
+ * const { data, error } = useSWR(
+ *   user.id ? `/api/user/${user.id}` : null,
+ *   fetcher
+ * )
+ * ```
+ *
+ * @example Dynamic key with function
+ * ```ts
+ * const { data, error } = useSWR(
+ *   () => user.id ? [`/api/user/${user.id}`, user.token] : null,
+ *   ([url, token]) => fetcher(url, { headers: { Authorization: token } })
+ * )
+ * ```
+ */
+
+--- src/_internal/utils/config.ts:55-88 ---
+export const defaultConfig: FullConfiguration = mergeObjects(
+  {
+    // events
+    onLoadingSlow: noop,
+    onSuccess: noop,
+    onError: noop,
+    onErrorRetry,
+    onDiscarded: noop,
+
+    // switches
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+    revalidateIfStale: true,
+    shouldRetryOnError: true,
+
+    // timeouts
+    errorRetryInterval: slowConnection ? 10000 : 5000,
+    focusThrottleInterval: 5 * 1000,
+    dedupingInterval: 2 * 1000,
+    loadingTimeout: slowConnection ? 5000 : 3000,
+
+    // providers
+    compare,
+    isPaused: () => false,
+    cache,
+    mutate,
+    unload,
+    fallback: {}
+  },
+  // use web preset by default
+  preset
+)
+
+
+--- src/_internal/events.ts:0-6 ---
+export const FOCUS_EVENT = 0
+export const RECONNECT_EVENT = 1
+export const MUTATE_EVENT = 2
+export const ERROR_REVALIDATE_EVENT = 3
+export const UNLOAD_EVENT = 4
+
+
+--- src/_internal/types.ts:363-386 ---
+export type FullConfiguration<
+  Data = any,
+  Error = any,
+  Fn extends Fetcher = BareFetcher
+> = InternalConfiguration &
+  PublicConfiguration<Data, Error, Fn> & {
+    /**
+     * server-loaded data to be consumed by client hooks and written into cache
+     * @experimental
+     */
+    cacheData?: CacheData<Data>
+  }
+
+/**
+ * Provider configuration for custom focus and reconnect event handling.
+ *
+ * This configuration allows custom implementations for detecting window focus
+ * and network reconnection events. Useful for React Native or other environments
+ * where the default browser APIs are not available.
+ *
+ * @public
+ * @see {@link https://swr.vercel.app/docs/advanced/react-native | React Native Documentation}
+ */
+
+--- src/_internal/types.ts:1128-1134 ---
+export type RevalidateEvent =
+  | typeof revalidateEvents.FOCUS_EVENT
+  | typeof revalidateEvents.RECONNECT_EVENT
+  | typeof revalidateEvents.MUTATE_EVENT
+  | typeof revalidateEvents.ERROR_REVALIDATE_EVENT
+  | typeof revalidateEvents.UNLOAD_EVENT
+
+--- README.md:0-57 ---
+[![SWR](https://assets.vercel.com/image/upload/v1572289618/swr/banner.png)](https://swr.vercel.app)
+
+<p align="center">
+  <a aria-label="Vercel logo" href="https://vercel.com">
+    <img src="https://badgen.net/badge/icon/Made%20by%20Vercel?icon=zeit&label&color=black&labelColor=black">
+  </a>
+  <br/>
+  <a aria-label="NPM version" href="https://www.npmjs.com/package/swr">
+    <img alt="" src="https://badgen.net/npm/v/swr">
+  </a>
+  <a aria-label="Package size" href="https://bundlephobia.com/result?p=swr">
+    <img alt="" src="https://badgen.net/bundlephobia/minzip/swr">
+  </a>
+  <a aria-label="License" href="https://github.com/vercel/swr/blob/main/LICENSE">
+    <img alt="" src="https://badgen.net/npm/license/swr">
+  </a>
+</p>
+
+## Introduction
+
+SWR is a React Hooks library for data fetching.
+
+The name “**SWR**” is derived from `stale-while-revalidate`, a cache invalidation strategy popularized by [HTTP RFC 5861](https://tools.ietf.org/html/rfc5861).
+**SWR** first returns the data from cache (stale), then sends the request (revalidate), and finally comes with the up-to-date data again.
+
+With just one hook, you can significantly simplify the data fetching logic in your project. And it also covered in all aspects of speed, correctness, and stability to help you build better experiences:
+
+- **Fast**, **lightweight** and **reusable** data fetching
+- Transport and protocol agnostic
+- Built-in **cache** and request deduplication
+- **Real-time** experience
+- Revalidation on focus
+- Revalidation on network recovery
+- Polling
+- Pagination and scroll position recovery
+- SSR and SSG
+- Local mutation (Optimistic UI)
+- Built-in smart error retry
+- TypeScript
+- React Suspense
+- React Native
+
+...and a lot more.
+
+With SWR, components will get **a stream of data updates constantly and automatically**. Thus, the UI will be always **fast** and **reactive**.
+
+---
+
+**View full documentation and examples on [swr.vercel.app](https://swr.vercel.app).**
+
+<br/>
+
+## Quick Start
+
+```js
+import useSWR from 'swr'
+
+
+--- src/_internal/types.ts:1134-1141 ---
+type RevalidateCallbackReturnType = {
+  [revalidateEvents.FOCUS_EVENT]: void
+  [revalidateEvents.RECONNECT_EVENT]: void
+  [revalidateEvents.MUTATE_EVENT]: Promise<boolean>
+  [revalidateEvents.ERROR_REVALIDATE_EVENT]: void
+  [revalidateEvents.UNLOAD_EVENT]: void
+}
+
+--- src/immutable/index.ts:4-17 ---
+export const immutable: Middleware = useSWRNext => (key, fetcher, config) => {
+  // Always override all revalidate options.
+  config.revalidateOnFocus = false
+  config.revalidateIfStale = false
+  config.revalidateOnReconnect = false
+  config.refreshInterval = 0
+  return useSWRNext(key, fetcher, config)
+}
+
+const useSWRImmutable = withMiddleware(useSWR, immutable)
+
+export default useSWRImmutable
+
+
+--- src/_internal/utils/web-preset.ts:42-70 ---
+const initReconnect = (callback: () => void) => {
+  // revalidate on reconnected
+  const onOnline = () => {
+    online = true
+    callback()
+  }
+  // nothing to revalidate, just update the status
+  const onOffline = () => {
+    online = false
+  }
+  onWindowEvent('online', onOnline)
+  onWindowEvent('offline', onOffline)
+  return () => {
+    offWindowEvent('online', onOnline)
+    offWindowEvent('offline', onOffline)
+  }
+}
+
+export const preset = {
+  isOnline,
+  isVisible
+} as const
+
+export const defaultConfigOptions: ProviderConfiguration = {
+  initFocus,
+  initReconnect
+}
+
+
+--- src/_internal/types.ts:961-972 ---
+export type State<Data = any, Error = any> = {
+  /** The cached data, if available */
+  data?: Data
+  /** The error object, if an error occurred */
+  error?: Error
+  /** Whether a revalidation is currently in progress */
+  isValidating?: boolean
+  /** Whether this is the initial load with no cached data */
+  isLoading?: boolean
+}
+
+
+--- src/_internal/utils/cache.ts:187-200 ---
+    // This is a new provider, we need to initialize it and setup DOM events
+    // listeners for `focus` and `reconnect` actions.
+
+    // We might want to inject an extra layer on top of `provider` in the future,
+    // such as key serialization, auto GC, etc.
+    // For now, it's just a `Map` interface without any modifications.
+    return [provider, mutate, initProvider, unmount, unload]
+  }
+
+  const state = SWRGlobalState.get(provider) as GlobalState
+  return [provider, state[4], UNDEFINED, UNDEFINED, state[7]]
+}
+
+
+--- src/index/use-swr.ts:152-181 ---
+const sub = () => noop
+/**
+ * The core implementation of the useSWR hook.
+ *
+ * This is the main handler function that implements all SWR functionality including
+ * data fetching, caching, revalidation, error handling, and state management.
+ * It manages the complete lifecycle of SWR requests from initialization through
+ * cleanup.
+ *
+ * Key responsibilities:
+ * - Key serialization and normalization
+ * - Cache state management and synchronization
+ * - Automatic and manual revalidation
+ * - Error handling and retry logic
+ * - Suspense integration
+ * - Loading state management
+ * - Effect cleanup and memory management
+ *
+ * @template Data - The type of data returned by the fetcher
+ * @template Error - The type of error that can be thrown
+ *
+ * @param _key - The SWR key (string, array, object, function, or falsy)
+ * @param fetcher - The fetcher function to retrieve data, or null to disable fetching
+ * @param config - Complete SWR configuration object with both public and internal options
+ *
+ * @returns SWRResponse object containing data, error, mutate function, and loading states
+ *
+ * @internal This is the internal implementation. Use `useSWR` instead.
+ */
+
+--- src/_internal/types.ts:862-877 ---
+export type MutatorCallback<Data = any> = (
+  currentData?: Data
+) => Promise<undefined | Data> | undefined | Data
+
+/**
+ * Options for configuring mutator behavior.
+ *
+ * These options control how the mutation affects the cache, revalidation,
+ * and error handling behavior.
+ *
+ * @template Data - The type of the data related to the key
+ * @template MutationData - The type of the data returned by the mutator
+ *
+ * @public
+ */
+
+--- src/_internal/utils/mutate.ts:200-220 ---
+
+    // Reset the timestamp to mark the mutation has ended.
+    MUTATION[key][1] = getTimestamp()
+
+    // Update existing SWR Hooks' internal states:
+    Promise.resolve(startRevalidate()).then(() => {
+      // The mutation and revalidation are ended, we can clear it since the data is
+      // not an optimistic value anymore.
+      set({ _c: UNDEFINED })
+    })
+
+    // Throw error or return data
+    if (isError) {
+      if (throwOnError) throw error
+      return
+    }
+    return data
+  }
+}
+
+
+--- src/index/use-swr.ts:821-901 ---
+        return revalidate()
+      } else if (type == revalidateEvents.ERROR_REVALIDATE_EVENT) {
+        return revalidate(opts)
+      } else if (type == revalidateEvents.UNLOAD_EVENT) {
+        // The cache has been cleared: drop the previous data kept by
+        // `keepPreviousData` so it can't stay on screen.
+        laggyDataRef.current = UNDEFINED
+        if (opts.revalidate) {
+          return revalidate()
+        }
+      }
+      return
+    }
+
+    const unsubEvents = subscribeCallback(key, EVENT_REVALIDATORS, onRevalidate)
+
+    // Mark the component as mounted and update corresponding refs.
+    unmountedRef.current = false
+    keyRef.current = key
+    initialMountedRef.current = true
+
+    // Keep the original key in the cache.
+    setCache({ _k: fnArg })
+
+    // Trigger a revalidation
+    if (shouldDoInitialRevalidation) {
+      // Performance optimization: if a request is already in progress for this key,
+      // skip the revalidation to avoid redundant work
+      if (!FETCH[key]) {
+        if (isUndefined(data) || IS_SERVER) {
+          // Revalidate immediately.
+          softRevalidate()
+        } else {
+          // Delay the revalidate if we have data to return so we won't block
+          // rendering.
+          rAF(softRevalidate)
+        }
+      }
+    }
+
+    return () => {
+      // Mark it as unmounted.
+      unmountedRef.current = true
+
+      unsubEvents()
+    }
+  }, [key])
+
+  // Polling
+  useIsomorphicLayoutEffect(() => {
+    let timer: any
+
+    function next() {
+      // Use the passed interval
+      // ...or invoke the function with the updated data to get the interval
+      const interval = isFunction(refreshInterval)
+        ? refreshInterval(getCache().data)
+        : refreshInterval
+
+      // We only start the next interval if `refreshInterval` is not 0, and:
+      // - `force` is true, which is the start of polling
+      // - or `timer` is not 0, which means the effect wasn't canceled
+      if (interval && timer !== -1) {
+        timer = setTimeout(execute, interval)
+      }
+    }
+
+    function execute() {
+      // Check if it's OK to execute:
+      // Only revalidate when the page is visible, online, and not errored.
+      if (
+        !getCache().error &&
+        (refreshWhenHidden || getConfig().isVisible()) &&
+        (refreshWhenOffline || getConfig().isOnline())
+      ) {
+        revalidate(WITH_DEDUPE).then(next)
+      } else {
+        // Schedule the next interval to check again.
+        next()
+      }
+
+--- src/mutation/types.ts:271-302 ---
+    /**
+     * The key of the resource that will be mutated. It should be the same key
+     * used in the `useSWR` hook so SWR can handle revalidation and race
+     * conditions for that resource.
+     */
+    key: SWRMutationKey,
+    /**
+     * The function to trigger the mutation that accepts the key, extra argument
+     * and options. For example:
+     *
+     * ```jsx
+     * (api, data) => fetch(api, {
+     *   method: 'POST',
+     *   body: JSON.stringify(data)
+     * })
+     * ```
+     */
+    fetcher: MutationFetcher<Data, SWRMutationKey, ExtraArg>,
+    /**
+     * Extra options for the mutation hook.
+     */
+    options?: SWRMutationConfiguration<
+      Data,
+      Error,
+      SWRMutationKey,
+      ExtraArg,
+      SWRData
+    > & { throwOnError: true }
+  ): SWRMutationResponse<Data, Error, SWRMutationKey, ExtraArg>
+}
+
+
+--- src/mutation/types.ts:191-271 ---
+export interface SWRMutationHook {
+  <
+    Data = any,
+    Error = any,
+    SWRMutationKey extends Key = Key,
+    ExtraArg = never,
+    SWRData = Data
+  >(
+    /**
+     * The key of the resource that will be mutated. It should be the same key
+     * used in the `useSWR` hook so SWR can handle revalidation and race
+     * conditions for that resource.
+     */
+    key: SWRMutationKey,
+    /**
+     * The function to trigger the mutation that accepts the key, extra argument
+     * and options. For example:
+     *
+     * ```jsx
+     * (api, data) => fetch(api, {
+     *   method: 'POST',
+     *   body: JSON.stringify(data)
+     * })
+     * ```
+     */
+    fetcher: MutationFetcher<Data, SWRMutationKey, ExtraArg>,
+    /**
+     * Extra options for the mutation hook.
+     */
+    options?: SWRMutationConfiguration<
+      Data,
+      Error,
+      SWRMutationKey,
+      ExtraArg,
+      SWRData
+    > & { throwOnError?: boolean }
+  ): SWRMutationResponse<Data, Error, SWRMutationKey, ExtraArg>
+  <
+    Data = any,
+    Error = any,
+    SWRMutationKey extends Key = Key,
+    ExtraArg = never,
+    SWRData = Data
+  >(
+    /**
+     * The key of the resource that will be mutated. It should be the same key
+     * used in the `useSWR` hook so SWR can handle revalidation and race
+     * conditions for that resource.
+     */
+    key: SWRMutationKey,
+    /**
+     * The function to trigger the mutation that accepts the key, extra argument
+     * and options. For example:
+     *
+     * ```jsx
+     * (api, data) => fetch(api, {
+     *   method: 'POST',
+     *   body: JSON.stringify(data)
+     * })
+     * ```
+     */
+    fetcher: MutationFetcher<Data, SWRMutationKey, ExtraArg>,
+    /**
+     * Extra options for the mutation hook.
+     */
+    options?: SWRMutationConfiguration<
+      Data,
+      Error,
+      SWRMutationKey,
+      ExtraArg,
+      SWRData
+    > & { throwOnError: false }
+  ): SWRMutationResponse<Data | undefined, Error, SWRMutationKey, ExtraArg>
+  <
+    Data = any,
+    Error = any,
+    SWRMutationKey extends Key = Key,
+    ExtraArg = never,
+    SWRData = Data
+  >(
+
+--- src/_internal/types.ts:11-37 ---
+export type GlobalState = [
+  /** Event revalidators: Maps cache keys to arrays of revalidation callbacks */
+  Record<string, RevalidateCallback[]>,
+  /** Mutation timestamps: Maps cache keys to [start_timestamp, end_timestamp] tuples */
+  Record<string, [number, number]>,
+  /** Fetch cache: Maps cache keys to [data, timestamp] tuples */
+  Record<string, [any, number]>,
+  /** Preload cache: Maps cache keys to fetcher responses */
+  Record<string, FetcherResponse<any>>,
+  /** Scoped mutator function for cache updates */
+  ScopedMutator,
+  /** Cache setter function with prev/current value comparison */
+  (key: string, value: any, prev: any) => void,
+  /** Cache subscriber function that returns an unsubscribe function */
+  (key: string, callback: (current: any, prev: any) => void) => () => void,
+  /** Unloader function that clears the cache and notifies subscribers */
+  Unloader,
+  /** Unload generation, bumped on every unload to discard in-flight writes */
+  number
+]
+/**
+ * Response type that can be returned by fetcher functions.
+ *
+ * @template Data - The type of data returned by the fetcher
+ * @public
+ */
+
+--- src/_internal/types.ts:1074-1128 ---
+export interface SWRResponse<Data = any, Error = any, Config = any> {
+  /**
+   * The data returned by the fetcher function.
+   *
+   * - When suspense is enabled or fallbackData is provided: always defined
+   * - Otherwise: `undefined` during initial load or when key is falsy
+   */
+  data: BlockingData<Data, Config> extends true ? Data : Data | undefined
+
+  /**
+   * The error object thrown by the fetcher function.
+   *
+   * `undefined` when there's no error or when a request is in progress.
+   */
+  error: Error | undefined
+
+  /**
+   * Function to mutate the cached data for this specific key.
+   *
+   * This is a bound version of the global mutate function that automatically
+   * uses the current key, providing type safety and convenience.
+   */
+  mutate: KeyedMutator<Data>
+
+  /**
+   * Whether the request is currently being validated (loading fresh data).
+   *
+   * `true` during initial load, revalidation, or when mutate is called
+   * with a promise or async function.
+   */
+  isValidating: boolean
+
+  /**
+   * Whether the request is in initial loading state.
+   *
+   * `true` only during the initial load when there's no cached data.
+   * Unlike `isValidating`, this becomes `false` once data is available.
+   */
+  isLoading: IsLoadingResponse<Data, Config>
+}
+
+export type KeyLoader<Args extends Arguments = Arguments> =
+  | ((index: number, previousPageData: any | null) => Args)
+  | null
+
+export interface RevalidatorOptions {
+  retryCount?: number
+  dedupe?: boolean
+}
+
+export type Revalidator = (
+  revalidateOpts?: RevalidatorOptions
+) => Promise<boolean> | void
+
+
+--- src/_internal/types.ts:877-939 ---
+export type MutatorOptions<Data = any, MutationData = Data> = {
+  /**
+   * Whether to revalidate the cache after mutation.
+   *
+   * Can be a boolean or a function that receives the new data and key
+   * to determine whether revalidation should occur.
+   *
+   * @defaultValue true
+   */
+  revalidate?: boolean | ((data: Data, key: Arguments) => boolean)
+
+  /**
+   * Whether and how to populate the cache with mutation results.
+   *
+   * - `false`: Don't update the cache
+   * - `true`: Update cache with mutation result directly
+   * - Function: Transform mutation result before caching
+   *
+   * @defaultValue true
+   */
+  populateCache?:
+    | boolean
+    | ((result: MutationData, currentData: Data | undefined) => Data)
+
+  /**
+   * Optimistic data to show immediately while mutation is pending.
+   *
+   * Can be the data directly or a function that computes it based on
+   * current and displayed data. Useful for immediate UI feedback.
+   *
+   * @defaultValue undefined
+   */
+  optimisticData?:
+    | Data
+    | ((currentData: Data | undefined, displayedData: Data | undefined) => Data)
+
+  /**
+   * Whether to rollback optimistic updates on error.
+   *
+   * Can be a boolean or a function that receives the error to determine
+   * whether rollback should occur.
+   *
+   * @defaultValue true
+   */
+  rollbackOnError?: boolean | ((error: unknown) => boolean)
+
+  /**
+   * Whether to throw errors instead of returning them in the error field.
+   *
+   * When true, errors will be thrown and can be caught with try/catch.
+   * When false, errors are returned in the response object.
+   *
+   * @defaultValue false
+   */
+  throwOnError?: boolean
+}
+
+export type MutatorConfig = {
+  revalidate?: boolean
+  populateCache?: boolean
+}
+
+
+--- src/_internal/types.ts:1190-1197 ---
+export interface StateDependencies {
+  data?: boolean
+  error?: boolean
+  isValidating?: boolean
+  isLoading?: boolean
+}
+
+
+--- src/_internal/types.ts:829-836 ---
+export type StrictTupleKey = ArgumentsTuple | null | undefined | false
+
+/**
+ * Strict key type for internal use.
+ *
+ * @internal
+ */
+
+--- src/_internal/types.ts:822-829 ---
+export type Key = Arguments | (() => Arguments)
+
+/**
+ * Strict tuple key type that only allows tuples or falsy values.
+ *
+ * @internal
+ */
+
+--- src/_internal/types.ts:37-45 ---
+export type FetcherResponse<Data = unknown> = Data | Promise<Data>
+
+/**
+ * Cache data produced on the server and consumed by SWRConfig on the client.
+ *
+ * @experimental
+ * @public
+ */
+
+--- src/_internal/utils/config.ts:45-55 ---
+const [cache, mutate, , , unload] = initCache(new Map()) as [
+  Cache<any>,
+  ScopedMutator,
+  unknown,
+  unknown,
+  Unloader
+]
+export { cache, mutate, unload, compare }
+
+// Default config
+
+--- src/_internal/types.ts:972-979 ---
+export type MutatorFn<Data = any> = (
+  cache: Cache,
+  key: Key,
+  data?: Data | Promise<Data> | MutatorCallback<Data>,
+  opts?: boolean | MutatorOptions<Data>
+) => Promise<Data | undefined>
+
+
+--- src/_internal/utils/shared.ts:0-2 ---
+// Shared state between server components and client components
+
+
+--- src/_internal/utils/merge-config.ts:0-3 ---
+import { mergeObjects } from './shared'
+import type { FullConfiguration } from '../types'
+
+
+--- src/_internal/utils/timestamp.ts:0-5 ---
+// Global timestamp.
+let __timestamp = 0
+
+export const getTimestamp = () => ++__timestamp
+
+
+--- src/_internal/constants.ts:0-2 ---
+export const INFINITE_PREFIX = '$inf$'

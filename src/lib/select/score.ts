@@ -21,7 +21,7 @@ const B = 0.75; // how hard to penalise long chunks
  * "matched" reason shown to the user, where they read as noise and make a good
  * selection look accidental.
  */
-const STOPWORDS = new Set([
+export const STOPWORDS = new Set([
   "how", "does", "do", "the", "this", "that", "what", "when", "where", "why",
   "which", "who", "is", "are", "was", "were", "and", "or", "but", "for", "with",
   "from", "into", "onto", "on", "in", "at", "to", "of", "it", "its", "work",

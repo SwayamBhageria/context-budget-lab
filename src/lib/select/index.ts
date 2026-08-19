@@ -71,21 +71,45 @@ export function select(
     }))
     .sort((a, b) => b.score / b.chunk.tokens - a.score / a.chunk.tokens);
 
+  // Prefix, not best-fit. Stopping at the first chunk that does not fit — rather
+  // than skipping it to squeeze in smaller ones — makes the selected set a strict
+  // superset as the budget grows.
+  //
+  // Skipping measurably broke that: recall on zustand's shallow question read
+  // 100% at 200 tokens, 0% at 400, 100% at 800, because a larger budget admitted
+  // one big chunk and displaced several small ones holding the answer. A metric
+  // that moves non-monotonically with budget cannot support a claim about the
+  // minimum budget, and binary search over it is meaningless.
+  //
+  // The cost is a wasted tail of unused budget. That is the correct trade: this
+  // is an instrument, and an instrument that reads differently on the way up than
+  // on the way down is broken regardless of how efficiently it packs.
+  let stopped = false;
   for (const c of directPacked) {
-    if (used + c.chunk.tokens <= budget) {
+    if (!stopped && used + c.chunk.tokens <= budget) {
       kept.push(c);
       used += c.chunk.tokens;
     } else {
+      stopped = true;
       nearMisses.push({ chunk: c.chunk, score: c.score, reason: "over-budget" });
     }
   }
 
-  // Pass 2 — context to understand pass 1, spending only what's left.
+  // Pass 2 — context to understand pass 1.
+  //
+  // Capped at the size of pass 1, not at the remaining budget. A budget is a
+  // ceiling, not a target: greedy packing to the ceiling buys tokens that dilute
+  // the prompt and cost money, and measurably did — every question was landing
+  // within 20 tokens of an 8000 budget regardless of how much it actually needed.
+  //
+  // The cap is proportional rather than a tuned constant because the principle is
+  // that supporting context should not outweigh the content it supports.
+  const directTokens = used;
+  const expansionCeiling = Math.min(budget, used + directTokens);
   for (const c of expanded) {
-    if (used + c.chunk.tokens <= budget) {
-      kept.push(c);
-      used += c.chunk.tokens;
-    }
+    if (used + c.chunk.tokens > expansionCeiling) break; // prefix, as above
+    kept.push(c);
+    used += c.chunk.tokens;
   }
   const t3 = performance.now();
 

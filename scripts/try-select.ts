@@ -12,7 +12,8 @@ async function main() {
 
   console.log(`Q: ${query}\n`);
   console.log(`send everything  ${String(r.naiveTokens).padStart(7)}`);
-  console.log(`grep baseline    ${String(base.tokens).padStart(7)}  (${base.files.length} files)`);
+  console.log(`grep naive       ${String(base.naiveTokens).padStart(7)}  (${base.naiveFiles} files)`);
+  console.log(`grep best        ${String(base.bestTokens).padStart(7)}  (${base.bestFiles.length} files, term "${base.bestTerm}")`);
   console.log(`selected         ${String(r.selectedTokens).padStart(7)}  (-${r.reductionPct.toFixed(1)}%)`);
   console.log(`timings          score ${r.timings.scoreMs}ms  expand ${r.timings.expandMs}ms  pack ${r.timings.packMs}ms\n`);
   console.log("KEPT:");
