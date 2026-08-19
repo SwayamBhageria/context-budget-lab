@@ -7,7 +7,10 @@ import type { Repo, RepoFile, Chunk } from "@/lib/types";
 const SOURCE = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|php|md)$/i;
 /** Paths that inflate the index without ever answering a question. */
 const SKIP =
-  /(^|\/)(node_modules|\.git|dist|build|out|vendor|\.next|coverage|__pycache__|test|tests|__tests__|fixtures|examples?)\//i;
+  /(^|\/)(node_modules|\.git|\.github|dist|build|out|vendor|\.next|coverage|__pycache__|test|tests|__tests__|fixtures|examples?)\//i;
+/** Project meta that discusses the code without ever explaining it. */
+const SKIP_FILE =
+  /(^|\/)(CONTRIBUTING|CHANGELOG|CODE_OF_CONDUCT|SECURITY|LICENSE|MIGRATION)\.md$/i;
 const MAX_FILE_BYTES = 200_000;
 
 export async function fetchRepo(slug: string, ref = "HEAD"): Promise<Repo> {
@@ -30,7 +33,7 @@ export function buildRepo(
   const chunks: Chunk[] = [];
 
   for (const e of entries) {
-    if (!SOURCE.test(e.path) || SKIP.test(e.path)) continue;
+    if (!SOURCE.test(e.path) || SKIP.test(e.path) || SKIP_FILE.test(e.path)) continue;
     if (e.text.length > MAX_FILE_BYTES) continue;
     const tokens = countTokens(e.text);
     files.push({

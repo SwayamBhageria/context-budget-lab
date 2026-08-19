@@ -2,13 +2,18 @@ import type { Repo, Selected, SelectionReport, DropReason } from "@/lib/types";
 import { scoreChunks } from "./score";
 import { neighbours } from "@/lib/ingest/graph";
 
-/** Score decay per hop away from a directly-matching chunk. */
-const HOP_DECAY = 0.5;
 const MAX_HOPS = 2;
-/** Chunks scoring below this are treated as noise, not weak signal. */
-const NOISE_FLOOR = 0.01;
+/** Below this a BM25 score is noise, not weak signal. */
+const NOISE_FLOOR = 0.35;
 /** How many top-scoring chunks seed the graph walk. */
 const SEED_COUNT = 12;
+/**
+ * Expansion scores are scaled to sit strictly below every direct match, so a
+ * cheap neighbour can never outrank the code that actually answers the question.
+ * Ordering within the expanded tier is all these values need to express.
+ */
+const SIBLING_WEIGHT = 0.6; // same file as a direct match
+const HOP_DECAY = 0.45;     // per hop along the import graph
 
 export function select(
   repo: Repo,
@@ -20,49 +25,66 @@ export function select(
   const scored = scoreChunks(query, repo.chunks);
   const t1 = performance.now();
 
-  // Seeds are the best direct matches; the graph walk starts from their files.
   const direct = scored
     .filter((s) => s.score > NOISE_FLOOR)
     .sort((a, b) => b.score - a.score);
+
   const seedFiles = [...new Set(direct.slice(0, SEED_COUNT).map((s) => s.chunk.path))];
   const hopsByFile = neighbours(seedFiles, graph, MAX_HOPS);
   const t2 = performance.now();
 
-  // Every chunk gets its best available score: direct match, or a decayed score
-  // inherited from being near one. A chunk can qualify both ways — take the max.
-  const candidates = scored.map((s) => {
-    const hops = hopsByFile.get(s.chunk.path);
-    const reachable = hops !== undefined;
-    const inherited = reachable ? bestSeedScore(direct) * HOP_DECAY ** hops : 0;
-    const isDirect = s.score > NOISE_FLOOR;
-    const finalScore = Math.max(s.score, inherited);
-    return {
-      ...s,
-      finalScore,
-      hops: isDirect && s.score >= inherited ? 0 : (hops ?? Infinity),
-      reason: buildReason(s.matched, isDirect && s.score >= inherited, hops),
-    };
-  });
+  const directIds = new Set(direct.map((d) => d.chunk.id));
+  const weakest = direct.length ? direct[direct.length - 1].score : 1;
 
-  // Pack by value per token — a cheap chunk that scores well beats an expensive
-  // one that scores slightly better. Greedy density is the standard knapsack
-  // approximation and the error is irrelevant at this granularity.
-  const packable = candidates
-    .filter((c) => c.finalScore > NOISE_FLOOR)
-    .sort((a, b) => b.finalScore / b.chunk.tokens - a.finalScore / a.chunk.tokens);
+  // Everything not directly matching, but reachable from something that did.
+  const expanded = scored
+    .filter((s) => !directIds.has(s.chunk.id) && hopsByFile.has(s.chunk.path))
+    .map((s) => {
+      const hops = hopsByFile.get(s.chunk.path)!;
+      const weight = hops === 0 ? SIBLING_WEIGHT : SIBLING_WEIGHT * HOP_DECAY ** hops;
+      return {
+        chunk: s.chunk,
+        // Strictly below the weakest direct match, by construction.
+        score: weakest * weight,
+        hops,
+        reason:
+          hops === 0
+            ? "same file as a match"
+            : hops === 1
+              ? "imported by / imports a match"
+              : `${hops} hops from a match`,
+      };
+    })
+    .sort((a, b) => b.score / b.chunk.tokens - a.score / a.chunk.tokens);
 
   const kept: Selected[] = [];
   const nearMisses: { chunk: Selected["chunk"]; score: number; reason: DropReason }[] = [];
   let used = 0;
 
-  for (const c of packable) {
+  // Pass 1 — direct matches. These are the answer; they get the budget first.
+  const directPacked = direct
+    .map((d) => ({
+      chunk: d.chunk,
+      score: d.score,
+      hops: 0,
+      reason: d.matched.length ? `matched: ${d.matched.slice(0, 3).join(", ")}` : "matched",
+    }))
+    .sort((a, b) => b.score / b.chunk.tokens - a.score / a.chunk.tokens);
+
+  for (const c of directPacked) {
     if (used + c.chunk.tokens <= budget) {
-      kept.push({ chunk: c.chunk, score: c.finalScore, reason: c.reason, hops: c.hops });
+      kept.push(c);
       used += c.chunk.tokens;
     } else {
-      // Scored well enough to belong, lost purely to the ceiling. This is the
-      // list the Dropped screen exists to show.
-      nearMisses.push({ chunk: c.chunk, score: c.finalScore, reason: "over-budget" });
+      nearMisses.push({ chunk: c.chunk, score: c.score, reason: "over-budget" });
+    }
+  }
+
+  // Pass 2 — context to understand pass 1, spending only what's left.
+  for (const c of expanded) {
+    if (used + c.chunk.tokens <= budget) {
+      kept.push(c);
+      used += c.chunk.tokens;
     }
   }
   const t3 = performance.now();
@@ -81,25 +103,11 @@ export function select(
     kept,
     droppedFiles: repo.files.length - keptPaths.size,
     droppedChunks: repo.chunks.length - kept.length,
-    nearMisses: nearMisses.slice(0, 25),
+    nearMisses: nearMisses.sort((a, b) => b.score - a.score).slice(0, 25),
     timings: {
       scoreMs: Math.round(t1 - t0),
       expandMs: Math.round(t2 - t1),
       packMs: Math.round(t3 - t2),
     },
   };
-}
-
-function bestSeedScore(direct: { score: number }[]): number {
-  return direct.length ? direct[0].score : 0;
-}
-
-function buildReason(matched: string[], isDirect: boolean, hops?: number): string {
-  if (isDirect) {
-    const shown = matched.slice(0, 3).join(", ");
-    return matched.length ? `matched: ${shown}` : "matched the question";
-  }
-  if (hops === 1) return "imported by a matching file";
-  if (hops !== undefined && hops > 1) return `${hops} hops from a match`;
-  return "no direct signal";
 }

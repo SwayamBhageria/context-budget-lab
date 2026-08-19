@@ -15,6 +15,21 @@ import type { Chunk } from "@/lib/types";
 const K1 = 1.5; // how fast term frequency saturates
 const B = 0.75; // how hard to penalise long chunks
 
+/**
+ * Words that appear in nearly every question and nearly every file. BM25's idf
+ * already drives their weight toward zero, but they still surface in the
+ * "matched" reason shown to the user, where they read as noise and make a good
+ * selection look accidental.
+ */
+const STOPWORDS = new Set([
+  "how", "does", "do", "the", "this", "that", "what", "when", "where", "why",
+  "which", "who", "is", "are", "was", "were", "and", "or", "but", "for", "with",
+  "from", "into", "onto", "on", "in", "at", "to", "of", "it", "its", "work",
+  "works", "working", "use", "used", "uses", "get", "set", "make", "made",
+  "can", "will", "would", "should", "there", "here", "than", "then", "all",
+  "any", "some", "not", "you", "your", "way", "does", "doing", "done",
+]);
+
 /** Split code into terms: identifiers, and the words inside camelCase/snake_case. */
 export function tokenize(text: string): string[] {
   const raw = text.match(/[A-Za-z_$][\w$]*/g) ?? [];
@@ -41,7 +56,7 @@ export interface ScoredChunk {
 }
 
 export function scoreChunks(query: string, chunks: Chunk[]): ScoredChunk[] {
-  const qTerms = [...new Set(tokenize(query))];
+  const qTerms = [...new Set(tokenize(query))].filter((t) => !STOPWORDS.has(t));
   const N = chunks.length;
 
   const termFreqs = chunks.map((c) => {
