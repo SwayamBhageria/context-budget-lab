@@ -24,7 +24,11 @@ async function main() {
   console.log("   everything:", await stat("send everything"));
   console.log("   selected:  ", await stat("selected"));
   console.log("   notice:    ", (await page.locator("text=/Indexed live from GitHub/").first().textContent())?.trim().slice(0, 90));
-  console.log("   top chunk: ", (await page.locator('section[class*="overflow-hidden"] > div span').first().textContent())?.trim());
+  // Ask something tiktoken actually contains, now that the empty case is explained.
+  await page.locator('input:not([type]):not([placeholder])').first().fill("how are byte pair merges applied?");
+  await page.waitForTimeout(6000);
+  console.log("   after real question ->", await stat("selected"), "| top:",
+    (await page.locator('section[class*="overflow-hidden"] > div span').first().textContent())?.trim());
   console.log("\npage errors:", errs.length ? errs.slice(0, 3) : "none");
   await b.close();
 }

@@ -30,6 +30,7 @@ type Analysis = {
   };
   grep: { bestTokens: number; bestTerm: string | null; bestFiles: string[]; naiveTokens: number; missedByGrep: string[] };
   recall: { hits: Anchor[]; found: number; total: number; recallPct: number; quarantined: string | null; expectation: string; whyHard: string | null } | null;
+  embedding: { model: string; reached: boolean; minTokens: number | null } | null;
   minimum: { found: boolean; minBudget: number | null; tokensUsed: number | null; probes: number; source: "benchmark" | "user-marked" } | null;
   tokenizerNote: string;
 };
@@ -322,6 +323,19 @@ export default function Page() {
             />
             <Stat label={`grep "${data.grep.bestTerm ?? "—"}"`} value={n(data.grep.bestTokens)} sub={`${data.grep.bestFiles.length} files, whole`} />
             <Stat label="selected" value={n(r.selectedTokens)} sub={`${r.kept.length} chunks`} accent />
+            <Stat
+              label="dense retrieval"
+              value={data.embedding?.reached && data.embedding.minTokens ? n(data.embedding.minTokens) : "—"}
+              sub={
+                data.embedding?.reached && data.embedding.minTokens && data.minimum?.tokensUsed
+                  ? data.embedding.minTokens < data.minimum.tokensUsed
+                    ? `beats this selector by ${(data.minimum.tokensUsed / data.embedding.minTokens).toFixed(1)}×`
+                    : `this selector wins by ${(data.embedding.minTokens / data.minimum.tokensUsed).toFixed(1)}×`
+                  : data.embedding
+                    ? "all-MiniLM-L6-v2, precomputed"
+                    : "no baseline for this question"
+              }
+            />
             <Stat
               label="vs best grep"
               // Withheld unless every anchor was retrieved. A ratio next to a

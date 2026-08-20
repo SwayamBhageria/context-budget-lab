@@ -1,21 +1,85 @@
 {
- "lukeed/clsx|how does clsx handle nested arrays and objects?": {
+ "karpathy/micrograd|how does backward propagate gradients through the graph?": {
   "model": "Xenova/all-MiniLM-L6-v2",
   "reached": true,
-  "minTokens": 3059,
+  "minTokens": 567,
   "ranks": [
    {
-    "path": "src/index.js",
-    "line": 1,
-    "rank": 11
+    "path": "micrograd/engine.py",
+    "line": 54,
+    "rank": 1
+   },
+   {
+    "path": "micrograd/engine.py",
+    "line": 59,
+    "rank": 1
    }
   ],
   "topPaths": [
-   "clsx.d.ts",
-   "readme.md",
-   "bench/index.js",
-   "src/index.js",
-   "src/lite.js"
+   "micrograd/engine.py",
+   "README.md",
+   "setup.py",
+   "micrograd/nn.py"
+  ]
+ },
+ "karpathy/nanoGPT|how is causal self-attention masked?": {
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "reached": true,
+  "minTokens": 846,
+  "ranks": [
+   {
+    "path": "model.py",
+    "line": 49,
+    "rank": 2
+   },
+   {
+    "path": "model.py",
+    "line": 68,
+    "rank": 2
+   }
+  ],
+  "topPaths": [
+   "model.py",
+   "README.md"
+  ]
+ },
+ "karpathy/llm.c|how does the CPU reference implementation compute attention?": {
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "reached": true,
+  "minTokens": 6630,
+  "ranks": [
+   {
+    "path": "train_gpt2.c",
+    "line": 271,
+    "rank": 18
+   }
+  ],
+  "topPaths": [
+   "dev/cuda/attention_backward.cu",
+   "dev/cuda/attention_forward.cu",
+   "dev/cuda/residual_forward.cu"
+  ]
+ },
+ "pallets/flask|how does flask match a URL to a view function?": {
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "reached": true,
+  "minTokens": 71736,
+  "ranks": [
+   {
+    "path": "src/flask/app.py",
+    "line": 969,
+    "rank": 177
+   },
+   {
+    "path": "src/flask/sansio/app.py",
+    "line": 605,
+    "rank": 50
+   }
+  ],
+  "topPaths": [
+   "src/flask/wrappers.py",
+   "src/flask/helpers.py",
+   "src/flask/sansio/app.py"
   ]
  },
  "pmndrs/zustand|how does shallow compare Maps and Sets?": {
@@ -41,12 +105,12 @@
  "pmndrs/zustand|what does the devtools middleware connect to?": {
   "model": "Xenova/all-MiniLM-L6-v2",
   "reached": true,
-  "minTokens": 10813,
+  "minTokens": 11446,
   "ranks": [
    {
     "path": "src/middleware/devtools.ts",
     "line": 203,
-    "rank": 48
+    "rank": 56
    }
   ],
   "topPaths": [
@@ -92,17 +156,17 @@
  "pmndrs/zustand|why might a component not re-render after a state change?": {
   "model": "Xenova/all-MiniLM-L6-v2",
   "reached": true,
-  "minTokens": 38628,
+  "minTokens": 34833,
   "ranks": [
    {
     "path": "src/react.ts",
     "line": 30,
-    "rank": 134
+    "rank": 136
    },
    {
     "path": "src/vanilla.ts",
     "line": 79,
-    "rank": 170
+    "rank": 168
    }
   ],
   "topPaths": [
@@ -110,96 +174,6 @@
    "README.md",
    "docs/reference/middlewares/persist.md",
    "docs/reference/migrations/migrating-to-v5.md"
-  ]
- },
- "pallets/flask|how does flask match a URL to a view function?": {
-  "model": "Xenova/all-MiniLM-L6-v2",
-  "reached": true,
-  "minTokens": 71736,
-  "ranks": [
-   {
-    "path": "src/flask/app.py",
-    "line": 969,
-    "rank": 177
-   },
-   {
-    "path": "src/flask/sansio/app.py",
-    "line": 605,
-    "rank": 50
-   }
-  ],
-  "topPaths": [
-   "src/flask/wrappers.py",
-   "src/flask/helpers.py",
-   "src/flask/sansio/app.py"
-  ]
- },
- "gin-gonic/gin|how does gin match a request path to a handler?": {
-  "model": "Xenova/all-MiniLM-L6-v2",
-  "reached": true,
-  "minTokens": 175649,
-  "ranks": [
-   {
-    "path": "gin.go",
-    "line": 690,
-    "rank": 233
-   },
-   {
-    "path": "tree.go",
-    "line": 418,
-    "rank": 1134
-   }
-  ],
-  "topPaths": [
-   "context.go",
-   "binding/uri.go",
-   "ginS/README.md",
-   "docs/doc.md"
-  ]
- },
- "vercel/swr|what is the deduping interval and where is it enforced?": {
-  "model": "Xenova/all-MiniLM-L6-v2",
-  "reached": true,
-  "minTokens": 13074,
-  "ranks": [
-   {
-    "path": "src/_internal/utils/config.ts",
-    "line": 74,
-    "rank": 47
-   },
-   {
-    "path": "src/index/use-swr.ts",
-    "line": 585,
-    "rank": 5
-   }
-  ],
-  "topPaths": [
-   "src/index/use-swr.ts",
-   "src/_internal/utils/config.ts",
-   "src/_internal/utils/hash.ts",
-   "src/_internal/types.ts"
-  ]
- },
- "vercel/swr|how does revalidation on focus work?": {
-  "model": "Xenova/all-MiniLM-L6-v2",
-  "reached": true,
-  "minTokens": 1016,
-  "ranks": [
-   {
-    "path": "src/_internal/utils/web-preset.ts",
-    "line": 29,
-    "rank": 1
-   },
-   {
-    "path": "src/index/use-swr.ts",
-    "line": 800,
-    "rank": 4
-   }
-  ],
-  "topPaths": [
-   "src/_internal/utils/web-preset.ts",
-   "src/_internal/types.ts",
-   "src/index/use-swr.ts"
   ]
  }
 }
