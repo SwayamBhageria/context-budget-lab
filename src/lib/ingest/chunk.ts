@@ -9,7 +9,7 @@ import type { Chunk } from "@/lib/types";
  * whole enough to be understandable. Indentation-anchored splitting gets that
  * for every C-family and Python-family language at once.
  */
-const DECL = /^(export\s+)?(async\s+)?(function|class|const|let|var|interface|type|enum|def|struct|impl|fn|public|private|protected)\b/;
+const DECL = /^(export\s+)?(async\s+)?(function|class|const|let|var|interface|type|enum|def|struct|impl|fn|func|package|public|private|protected)\b/;
 
 /** Chunks larger than this are split again; smaller ones absorb their neighbour. */
 const MAX_LINES = 80;

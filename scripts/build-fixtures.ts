@@ -18,6 +18,18 @@ export const FIXTURES = [
     note: "The working zone: too big to send casually, small enough to verify.",
   },
   {
+    slug: "pallets/flask",
+    question: "how does flask match a URL to a view function?",
+    budget: 8000,
+    note: "Code-heavy Python: 1% markdown, the counter-case to zustand.",
+  },
+  {
+    slug: "gin-gonic/gin",
+    question: "how does gin match a request path to a handler?",
+    budget: 8000,
+    note: "Largest and a third language: 219k tokens of mostly Go.",
+  },
+  {
     slug: "pmndrs/zustand",
     question: "how does the persist middleware rehydrate state?",
     budget: 8000,
