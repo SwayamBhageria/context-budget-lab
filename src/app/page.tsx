@@ -26,7 +26,7 @@ type Analysis = {
     timings: { scoreMs: number; expandMs: number; packMs: number };
   };
   grep: { bestTokens: number; bestTerm: string | null; bestFiles: string[]; naiveTokens: number; missedByGrep: string[] };
-  recall: { hits: Anchor[]; found: number; total: number; recallPct: number; quarantined: string | null; expectation: string } | null;
+  recall: { hits: Anchor[]; found: number; total: number; recallPct: number; quarantined: string | null; expectation: string; whyHard: string | null } | null;
   minimum: { found: boolean; minBudget: number | null; tokensUsed: number | null; probes: number; source: "benchmark" | "user-marked" } | null;
   tokenizerNote: string;
 };
@@ -51,6 +51,11 @@ export default function Page() {
   const [marked, setMarked] = useState<Record<string, { path: string; line: number }>>({});
   const [err, setErr] = useState<string | null>(null);
   const seq = useRef(0);
+  const listRef = useRef<HTMLElement | null>(null);
+  // Set when the reader clicks the minimum figure: re-run at that budget, then
+  // scroll them to the code it is a claim about. A number they cannot see the
+  // basis of is a number they have to take on trust.
+  const [jump, setJump] = useState(false);
 
   useEffect(() => {
     fetch("/api/analyze").then((r) => r.json()).then(setMeta).catch(() => {});
@@ -87,8 +92,31 @@ export default function Page() {
   // silently measure the wrong thing.
   useEffect(() => { setMarked({}); }, [slug, question]);
 
+  // Runs after the re-render at the new budget, so the row exists to scroll to.
+  useEffect(() => {
+    if (!jump || busy || !data) return;
+    setJump(false);
+    setTab("kept");
+    const el = listRef.current?.querySelector<HTMLElement>('[data-target="1"]');
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.animate(
+        [{ backgroundColor: "rgba(16,185,129,0.35)" }, { backgroundColor: "transparent" }],
+        { duration: 1600, easing: "ease-out" },
+      );
+    }
+  }, [jump, busy, data]);
+
   const presets = meta?.benchmark.filter((b) => b.slug === slug) ?? [];
   const r = data?.report;
+
+  const targets: { path: string; line: number }[] =
+    Object.keys(marked).length > 0
+      ? Object.values(marked)
+      : (data?.recall?.hits ?? []).map((h) => ({ path: h.path, line: h.line }));
+
+  const isTarget = (c: Kept["chunk"]) =>
+    targets.some((t) => t.path === c.path && c.startLine <= t.line - 1 && t.line - 1 < c.endLine);
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-5 py-10 text-neutral-200">
@@ -184,10 +212,18 @@ export default function Page() {
                 data.minimum.found ? (
                   <div className="grid gap-0.5 text-neutral-400">
                     <p>
-                      {data.minimum.source === "user-marked" ? "Your marked chunks" : "Every anchor"} retrieved at{" "}
-                      <span className="font-mono text-emerald-400">{n(data.minimum.tokensUsed!)}</span> tokens
+                      {data.minimum.source === "user-marked" ? "Your marked chunks" : "The answer"} retrieved at{" "}
+                      <button
+                        onClick={() => { setBudget(data.minimum!.minBudget!); setJump(true); }}
+                        title="Set the budget here and jump to the code"
+                        className="font-mono text-emerald-400 underline decoration-dotted underline-offset-2 hover:text-emerald-300"
+                      >
+                        {n(data.minimum.tokensUsed!)}
+                      </button>{" "}
+                      tokens
                       <span className="text-neutral-600"> ({data.minimum.probes} probes)</span>
                     </p>
+                    <p className="text-neutral-600">Click it to set the budget there and jump to the code.</p>
                     {data.minimum.source === "user-marked" && (
                       <p className="text-neutral-600">Measured against what you marked, not a pre-registered benchmark.</p>
                     )}
@@ -265,6 +301,11 @@ export default function Page() {
                   </span>
                 )}
               </div>
+              <p className="mb-3 max-w-2xl text-xs leading-relaxed text-neutral-500">
+                These are the exact lines where this question is actually answered, found by
+                grepping the repository before the selector ever ran. Retrieval counts only if it
+                returns a chunk spanning the line — reaching the right file is not enough.
+              </p>
               <ul className="grid gap-1.5">
                 {data.recall.hits.map((h) => (
                   <li key={h.path + h.line} className="flex items-start gap-2 font-mono text-xs">
@@ -274,6 +315,12 @@ export default function Page() {
                   </li>
                 ))}
               </ul>
+              {data.recall.whyHard && data.recall.recallPct < 100 && (
+                <p className="mt-3 rounded border border-amber-900/60 bg-amber-950/20 p-3 text-xs leading-relaxed text-amber-200/80">
+                  <strong className="font-medium text-amber-300">Why this one fails.</strong>{" "}
+                  {data.recall.whyHard}
+                </p>
+              )}
               {data.recall.quarantined && (
                 <p className="mt-3 border-l-2 border-neutral-700 pl-3 text-xs text-neutral-500">{data.recall.quarantined}</p>
               )}
@@ -307,17 +354,22 @@ export default function Page() {
             )}
           </div>
 
-          <section className="overflow-hidden rounded-lg border border-neutral-800">
+          <section ref={listRef} className="overflow-hidden rounded-lg border border-neutral-800">
             {(tab === "kept" ? r.kept : r.nearMisses.map((m) => ({ chunk: m.chunk, score: m.score, reason: "lost to the budget", hops: -1 }))).map((k) => {
               const isMarked = !!marked[k.chunk.id];
               const markable = tab === "kept";
+              const target = tab === "kept" && isTarget(k.chunk);
               return (
                 <div
                   key={k.chunk.id}
+                  data-target={target ? "1" : undefined}
                   className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-neutral-800/70 px-3 py-2 font-mono text-xs last:border-0 ${
-                    isMarked ? "bg-emerald-950/30" : ""
+                    isMarked ? "bg-emerald-950/30" : target ? "bg-emerald-950/15" : ""
                   }`}
                 >
+                  {target && !isMarked && (
+                    <span title="contains the answer" className="text-emerald-500">◆</span>
+                  )}
                   {markable && (
                     <button
                       onClick={() =>

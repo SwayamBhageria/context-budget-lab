@@ -35,7 +35,14 @@ export async function POST(req: Request) {
   // source. A free-typed question has none, and the app says so rather than
   // inventing a score.
   const bench = BENCHMARK.find((c) => c.slug === slug && c.question === q);
-  const recall = bench ? { ...measureCase(bench, report.kept), quarantined: bench.quarantined ?? null, expectation: bench.expectation } : null;
+  const recall = bench
+    ? {
+        ...measureCase(bench, report.kept),
+        quarantined: bench.quarantined ?? null,
+        expectation: bench.expectation,
+        whyHard: bench.whyHard ?? null,
+      }
+    : null;
 
   // Anchors marked in the UI take precedence: for a question the benchmark does
   // not cover, the person asking can see which chunk answers it and is the only
