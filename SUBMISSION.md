@@ -69,6 +69,23 @@ Two rules make the number mean something:
 - **Each case declares its expectation before running.** One question is
   declared `expected-hard`, and it fails, at every budget.
 
+## Questions outside the benchmark
+
+The seven benchmark questions have ground truth. Anything typed in does not, so
+there is no verified minimum to search for — and the first version of the app
+silently did nothing when asked, then reported a saturation figure that was
+*larger* than a budget which visibly worked.
+
+The fix is to use the only oracle available: the person asking. They can see
+which chunk answers their question, so they mark it, and the binary search runs
+against that. Asking "what is revalidation" of swr returns a minimum of **1,798
+tokens** once the relevant chunk is marked, against the 13,000 a user would
+otherwise guess at.
+
+Those results are labelled `user-marked` and never mixed with the pre-registered
+benchmark, because ground truth supplied after seeing the output is a weaker
+claim and should read as one.
+
 ## Results
 
 Minimum context needed for full retrieval, against the best-case grep — the
