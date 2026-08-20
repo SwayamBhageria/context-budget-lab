@@ -10,7 +10,22 @@ import embeddingBaseline from "@/fixtures/embedding-baseline.json";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const { slug, question, budget, withMinimum, anchors, includeMarkdown } = await req.json();
+  // A malformed body is a client error, not a crash. req.json() throws on
+  // anything that is not valid JSON, which was surfacing as a 500.
+  let payload: Record<string, unknown>;
+  try {
+    payload = await req.json();
+  } catch {
+    return NextResponse.json({ error: "body must be valid JSON" }, { status: 400 });
+  }
+  const { slug, question, budget, withMinimum, anchors, includeMarkdown } = payload as {
+    slug?: unknown;
+    question?: unknown;
+    budget?: unknown;
+    withMinimum?: unknown;
+    anchors?: unknown;
+    includeMarkdown?: unknown;
+  };
 
   if (typeof slug !== "string" || typeof question !== "string") {
     return NextResponse.json({ error: "slug and question are required" }, { status: 400 });

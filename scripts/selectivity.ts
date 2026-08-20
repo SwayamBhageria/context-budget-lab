@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { buildGraph } from "../src/lib/ingest/graph";
+import type { Repo } from "../src/lib/types";
 import { grepBaseline } from "../src/lib/select/baseline";
 import { BENCHMARK } from "../src/lib/benchmark";
 import { findMinimumBudget } from "../src/lib/minimum";
@@ -12,13 +13,13 @@ import { findMinimumBudget } from "../src/lib/minimum";
  * If advantage tracks that rather than repo size, then both methods live or die
  * on the same signal and the honest claim is much narrower than "3.4x better".
  */
-const cache = new Map<string, any>();
+const cache = new Map<string, { repo: Repo; graph: ReturnType<typeof buildGraph> }>();
 function load(slug: string) {
   if (!cache.has(slug)) {
     const repo = JSON.parse(readFileSync(`src/fixtures/${slug.replace("/", "__")}.json`, "utf8")).repo;
     cache.set(slug, { repo, graph: buildGraph(repo.files) });
   }
-  return cache.get(slug);
+  return cache.get(slug)!;
 }
 
 const rows = BENCHMARK.filter((c) => !c.quarantined).map((c) => {
