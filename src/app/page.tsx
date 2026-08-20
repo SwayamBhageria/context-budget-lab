@@ -21,6 +21,7 @@ type Analysis = {
     kept: Kept[];
     droppedFiles: number;
     droppedChunks: number;
+    saturationTokens: number;
     nearMisses: { chunk: Kept["chunk"]; score: number }[];
     timings: { scoreMs: number; expandMs: number; packMs: number };
   };
@@ -44,6 +45,7 @@ export default function Page() {
   const [data, setData] = useState<Analysis | null>(null);
   const [tab, setTab] = useState<"kept" | "dropped">("kept");
   const [busy, setBusy] = useState(false);
+  const [asked, setAsked] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const seq = useRef(0);
 
@@ -77,7 +79,7 @@ export default function Page() {
     [slug, question, budget],
   );
 
-  useEffect(() => { run(false); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [slug, question, budget]);
+  useEffect(() => { setAsked(false); run(false); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [slug, question, budget]);
 
   const presets = meta?.benchmark.filter((b) => b.slug === slug) ?? [];
   const r = data?.report;
@@ -156,21 +158,49 @@ export default function Page() {
 
         <div className="flex flex-col justify-end gap-2">
           <button
-            onClick={() => run(true)}
+            onClick={() => { setAsked(true); run(true); }}
             disabled={busy}
             className="rounded border border-sky-800 bg-sky-950/60 px-3 py-2 text-sm text-sky-300 disabled:opacity-50"
           >
             Find minimum context
           </button>
-          {data?.minimum && (
-            <p className="max-w-[15rem] text-xs leading-snug text-neutral-400">
-              {data.minimum.found ? (
-                <>Full recall at <span className="font-mono text-emerald-400">{n(data.minimum.tokensUsed!)}</span> tokens
-                  <span className="text-neutral-600"> ({data.minimum.probes} probes)</span></>
+
+          {/*
+            Always answers. A question typed by the user has no ground truth, so
+            there is no verified minimum to search for — but returning null and
+            rendering nothing made the button look broken. The saturation point
+            is reported instead, labelled as what it is: a statement about the
+            selector's own confidence, not about whether the answer is present.
+          */}
+          {asked && !busy && data && (
+            <div className="max-w-[15rem] text-xs leading-snug">
+              {data.minimum ? (
+                data.minimum.found ? (
+                  <p className="text-neutral-400">
+                    Every anchor retrieved at{" "}
+                    <span className="font-mono text-emerald-400">{n(data.minimum.tokensUsed!)}</span> tokens
+                    <span className="text-neutral-600"> ({data.minimum.probes} probes)</span>
+                  </p>
+                ) : (
+                  <p className="text-amber-400">No budget up to 64,000 retrieves every anchor.</p>
+                )
               ) : (
-                <span className="text-amber-400">No budget up to 64,000 retrieves every anchor.</span>
+                <div className="grid gap-1 text-neutral-500">
+                  <p>
+                    Selection saturates at{" "}
+                    <span className="font-mono text-neutral-300">{n(r?.saturationTokens ?? 0)}</span> tokens.
+                  </p>
+                  <p>
+                    Below that the selector drops chunks it rated a match; above it, only
+                    neighbouring context is added.
+                  </p>
+                  <p className="text-neutral-600">
+                    No verified minimum: this question has no ground truth, so nothing here
+                    says the answer was actually retrieved.
+                  </p>
+                </div>
               )}
-            </p>
+            </div>
           )}
         </div>
       </section>

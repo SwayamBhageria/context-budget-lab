@@ -29,6 +29,8 @@ export function select(
     .filter((s) => s.score > NOISE_FLOOR)
     .sort((a, b) => b.score - a.score);
 
+  const saturationTokens = direct.reduce((a, d) => a + d.chunk.tokens, 0);
+
   const seedFiles = [...new Set(direct.slice(0, SEED_COUNT).map((s) => s.chunk.path))];
   const hopsByFile = neighbours(seedFiles, graph, MAX_HOPS);
   const t2 = performance.now();
@@ -125,6 +127,7 @@ export function select(
       ? ((repo.naiveTokens - used) / repo.naiveTokens) * 100
       : 0,
     kept,
+    saturationTokens,
     droppedFiles: repo.files.length - keptPaths.size,
     droppedChunks: repo.chunks.length - kept.length,
     nearMisses: nearMisses.sort((a, b) => b.score - a.score).slice(0, 25),

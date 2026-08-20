@@ -1455,29 +1455,23 @@ interface BearState {
 
 // State + actions are separated
 
---- docs/reference/middlewares/persist.md:213-219 ---
-type PositionStoreState = {
-  context: {
-    position: { x: number; y: number }
-  }
-}
-
-
---- docs/reference/middlewares/persist.md:281-287 ---
-type PositionStoreState = {
-  context: {
-    position: { x: number; y: number }
-  }
-}
-
-
 --- src/middleware/subscribeWithSelector.ts:0-2 ---
 import type { StateCreator, StoreMutatorIdentifier } from '../vanilla.ts'
 
 
---- src/middleware/persist.ts:0-6 ---
-import type {
-  StateCreator,
-  StoreApi,
-  StoreMutatorIdentifier,
-} from '../vanilla.ts'
+--- docs/reference/middlewares/persist.md:504-511 ---
+const removeSearchParam = (key: string) => {
+  const searchParams = getSearchParams()
+  searchParams.delete(key)
+
+  updateSearchParams(searchParams)
+}
+
+
+--- docs/reference/middlewares/persist.md:381-388 ---
+const updateSearchParam = (key: string, value: string) => {
+  const searchParams = getSearchParams()
+  searchParams.set(key, value)
+
+  updateSearchParams(searchParams)
+}

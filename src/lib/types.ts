@@ -51,6 +51,14 @@ export interface SelectionReport {
   kept: Selected[];
   droppedFiles: number;
   droppedChunks: number;
+  /**
+   * Total tokens of every chunk scoring above the noise floor — the budget at
+   * which the selector stops having to drop anything it rated a direct match.
+   * Below it you are cutting matches; above it you are only buying neighbouring
+   * context. Computable for ANY question because it describes the selector's own
+   * confidence, not correctness — it is not evidence the answer was retrieved.
+   */
+  saturationTokens: number;
   /** Populated when the budget forced out a chunk that scored well. */
   nearMisses: { chunk: Chunk; score: number; reason: DropReason }[];
   timings: { scoreMs: number; expandMs: number; packMs: number };
