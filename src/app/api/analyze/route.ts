@@ -9,7 +9,7 @@ import { TOKENIZER_NOTE } from "@/lib/tokens";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const { slug, question, budget, withMinimum } = await req.json();
+  const { slug, question, budget, withMinimum, anchors } = await req.json();
 
   if (typeof slug !== "string" || typeof question !== "string") {
     return NextResponse.json({ error: "slug and question are required" }, { status: 400 });
@@ -37,10 +37,28 @@ export async function POST(req: Request) {
   const bench = BENCHMARK.find((c) => c.slug === slug && c.question === q);
   const recall = bench ? { ...measureCase(bench, report.kept), quarantined: bench.quarantined ?? null, expectation: bench.expectation } : null;
 
-  const minimum =
-    withMinimum && bench
-      ? findMinimumBudget(loaded.repo, bench, loaded.graph, 64000)
-      : null;
+  // Anchors marked in the UI take precedence: for a question the benchmark does
+  // not cover, the person asking can see which chunk answers it and is the only
+  // available oracle. Their marks are labelled "user-marked" so the number is
+  // never mistaken for a pre-registered benchmark result.
+  const marked: { path: string; line: number }[] = Array.isArray(anchors)
+    ? anchors
+        .filter(
+          (a: unknown): a is { path: string; line: number } =>
+            !!a &&
+            typeof (a as { path?: unknown }).path === "string" &&
+            Number.isFinite((a as { line?: unknown }).line),
+        )
+        .slice(0, 20)
+    : [];
+
+  const minimum = !withMinimum
+    ? null
+    : marked.length > 0
+      ? findMinimumBudget(loaded.repo, q, marked, loaded.graph, 64000, "user-marked")
+      : bench
+        ? findMinimumBudget(loaded.repo, q, bench.anchors, loaded.graph, 64000, "benchmark")
+        : null;
 
   return NextResponse.json({
     slug,
