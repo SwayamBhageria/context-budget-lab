@@ -1,0 +1,160 @@
+{
+ "lukeed/clsx|how does clsx handle nested arrays and objects?": {
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "reached": true,
+  "minTokens": 3059,
+  "ranks": [
+   {
+    "path": "src/index.js",
+    "line": 1,
+    "rank": 11
+   }
+  ],
+  "topPaths": [
+   "clsx.d.ts",
+   "readme.md",
+   "bench/index.js",
+   "src/index.js",
+   "src/lite.js"
+  ]
+ },
+ "pmndrs/zustand|how does shallow compare Maps and Sets?": {
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "reached": true,
+  "minTokens": 2055,
+  "ranks": [
+   {
+    "path": "src/vanilla/shallow.ts",
+    "line": 12,
+    "rank": 10
+   },
+   {
+    "path": "src/vanilla/shallow.ts",
+    "line": 48,
+    "rank": 8
+   }
+  ],
+  "topPaths": [
+   "docs/reference/apis/shallow.md"
+  ]
+ },
+ "pmndrs/zustand|what does the devtools middleware connect to?": {
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "reached": true,
+  "minTokens": 10813,
+  "ranks": [
+   {
+    "path": "src/middleware/devtools.ts",
+    "line": 203,
+    "rank": 48
+   }
+  ],
+  "topPaths": [
+   "docs/reference/middlewares/devtools.md",
+   "docs/learn/guides/beginner-typescript.md",
+   "docs/learn/guides/advanced-typescript.md",
+   "src/middleware.ts"
+  ]
+ },
+ "pmndrs/zustand|how does persist know it has finished hydrating?": {
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "reached": true,
+  "minTokens": 319,
+  "ranks": [
+   {
+    "path": "src/middleware/persist.ts",
+    "line": 354,
+    "rank": 3
+   }
+  ],
+  "topPaths": [
+   "docs/reference/integrations/persisting-store-data.md",
+   "src/middleware/persist.ts"
+  ]
+ },
+ "pmndrs/zustand|how does subscribeWithSelector decide whether to call the listener?": {
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "reached": true,
+  "minTokens": 387,
+  "ranks": [
+   {
+    "path": "src/middleware/subscribeWithSelector.ts",
+    "line": 54,
+    "rank": 2
+   }
+  ],
+  "topPaths": [
+   "src/middleware/subscribeWithSelector.ts",
+   "README.md",
+   "docs/reference/middlewares/subscribe-with-selector.md"
+  ]
+ },
+ "pmndrs/zustand|why might a component not re-render after a state change?": {
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "reached": true,
+  "minTokens": 38628,
+  "ranks": [
+   {
+    "path": "src/react.ts",
+    "line": 30,
+    "rank": 134
+   },
+   {
+    "path": "src/vanilla.ts",
+    "line": 79,
+    "rank": 170
+   }
+  ],
+  "topPaths": [
+   "docs/reference/hooks/use-shallow.md",
+   "README.md",
+   "docs/reference/middlewares/persist.md",
+   "docs/reference/migrations/migrating-to-v5.md"
+  ]
+ },
+ "vercel/swr|what is the deduping interval and where is it enforced?": {
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "reached": true,
+  "minTokens": 13074,
+  "ranks": [
+   {
+    "path": "src/_internal/utils/config.ts",
+    "line": 74,
+    "rank": 47
+   },
+   {
+    "path": "src/index/use-swr.ts",
+    "line": 585,
+    "rank": 5
+   }
+  ],
+  "topPaths": [
+   "src/index/use-swr.ts",
+   "src/_internal/utils/config.ts",
+   "src/_internal/utils/hash.ts",
+   "src/_internal/types.ts"
+  ]
+ },
+ "vercel/swr|how does revalidation on focus work?": {
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "reached": true,
+  "minTokens": 1016,
+  "ranks": [
+   {
+    "path": "src/_internal/utils/web-preset.ts",
+    "line": 29,
+    "rank": 1
+   },
+   {
+    "path": "src/index/use-swr.ts",
+    "line": 800,
+    "rank": 4
+   }
+  ],
+  "topPaths": [
+   "src/_internal/utils/web-preset.ts",
+   "src/_internal/types.ts",
+   "src/index/use-swr.ts"
+  ]
+ }
+}

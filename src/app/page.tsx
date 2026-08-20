@@ -15,6 +15,7 @@ type Analysis = {
   codeTokens: number;
   files: number;
   chunks: number;
+  includeMarkdown: boolean;
   report: {
     selectedTokens: number;
     reductionPct: number;
@@ -42,6 +43,7 @@ export default function Page() {
   const [slug, setSlug] = useState("vercel/swr");
   const [question, setQuestion] = useState("how does revalidation on focus work?");
   const [budget, setBudget] = useState(8000);
+  const [includeMarkdown, setIncludeMarkdown] = useState(true);
   const [data, setData] = useState<Analysis | null>(null);
   const [tab, setTab] = useState<"kept" | "dropped">("kept");
   const [busy, setBusy] = useState(false);
@@ -70,7 +72,7 @@ export default function Page() {
         const res = await fetch("/api/analyze", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ slug, question, budget, withMinimum, anchors }),
+          body: JSON.stringify({ slug, question, budget, withMinimum, anchors, includeMarkdown }),
         });
         const json = await res.json();
         // Drop responses from superseded requests so a slow one can't overwrite
@@ -84,10 +86,10 @@ export default function Page() {
         if (mine === seq.current) setBusy(false);
       }
     },
-    [slug, question, budget],
+    [slug, question, budget, includeMarkdown],
   );
 
-  useEffect(() => { setAsked(false); run(false); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [slug, question, budget]);
+  useEffect(() => { setAsked(false); run(false); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [slug, question, budget, includeMarkdown]);
   // Marks belong to one question on one repo; carrying them across would
   // silently measure the wrong thing.
   useEffect(() => { setMarked({}); }, [slug, question]);
@@ -177,6 +179,24 @@ export default function Page() {
             </div>
           </label>
 
+          <label className="flex items-start gap-2 rounded border border-neutral-800 bg-neutral-950/60 px-3 py-2">
+            <input
+              type="checkbox"
+              checked={includeMarkdown}
+              onChange={(e) => setIncludeMarkdown(e.target.checked)}
+              className="mt-1 accent-sky-500"
+            />
+            <span className="grid gap-0.5">
+              <span className="text-xs text-neutral-300">Index markdown as well as code</span>
+              <span className="text-[11px] leading-snug text-neutral-500">
+                Docs share vocabulary with questions; code does not, so they crowd out the
+                implementation. Turning this off drops zustand&apos;s devtools question from 15,042
+                tokens to 3,176 and makes the unanswerable one resolve at 7,036 — but costs clsx 29%,
+                where the README really is the best explanation.
+              </span>
+            </span>
+          </label>
+
           <label className="grid gap-1">
             <span className="text-xs uppercase tracking-wider text-neutral-500">
               Token budget — <span className="font-mono text-neutral-300">{n(budget)}</span>
@@ -263,7 +283,11 @@ export default function Page() {
       {r && data && (
         <>
           <section className="mb-6 grid gap-px overflow-hidden rounded-lg border border-neutral-800 bg-neutral-800 sm:grid-cols-4">
-            <Stat label="send everything" value={n(data.repoTokens)} sub={`${n(data.codeTokens)} excluding markdown`} />
+            <Stat
+              label="send everything"
+              value={n(data.repoTokens)}
+              sub={data.includeMarkdown ? `${n(data.codeTokens)} without markdown` : "markdown excluded"}
+            />
             <Stat label={`grep "${data.grep.bestTerm ?? "—"}"`} value={n(data.grep.bestTokens)} sub={`${data.grep.bestFiles.length} files, whole`} />
             <Stat label="selected" value={n(r.selectedTokens)} sub={`${r.kept.length} chunks`} accent />
             <Stat
