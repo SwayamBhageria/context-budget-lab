@@ -29,6 +29,9 @@ export interface BenchmarkCase {
   slug: string;
   question: string;
   anchors: Anchor[];
+  /** Shown to the reader when a case fails, so a demonstrated limitation does
+   *  not read as a broken app. */
+  whyHard?: string;
   /** Declared before the run, so a pass cannot be claimed retroactively. */
   expectation: "should-pass" | "expected-hard";
   quarantined?: string;
@@ -86,6 +89,8 @@ export const BENCHMARK: BenchmarkCase[] = [
     // No rare term to latch onto: component, state, change appear everywhere.
     // The documented weakness of any lexical method, kept because it is unflattering.
     expectation: "expected-hard",
+    whyHard:
+      "Every word in this question — component, state, change, render — appears throughout the repo, so BM25 has no rare term to grip and the answer scores no higher than anything else. The answer lives in useSyncExternalStore and a listeners.forEach call, neither of which shares vocabulary with the question. This is the standard failure mode of lexical retrieval and the reason production systems add embeddings. It is in the suite on purpose: a benchmark where every question passes is a benchmark whose questions were chosen to pass.",
   },
   {
     slug: "vercel/swr",
