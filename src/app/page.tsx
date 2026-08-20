@@ -27,7 +27,7 @@ type Analysis = {
   };
   grep: { bestTokens: number; bestTerm: string | null; bestFiles: string[]; naiveTokens: number; missedByGrep: string[] };
   recall: { hits: Anchor[]; found: number; total: number; recallPct: number; quarantined: string | null; expectation: string } | null;
-  minimum: { found: boolean; minBudget: number | null; tokensUsed: number | null; probes: number } | null;
+  minimum: { found: boolean; minBudget: number | null; tokensUsed: number | null; probes: number; source: "benchmark" | "user-marked" } | null;
   tokenizerNote: string;
 };
 type Meta = {
@@ -46,6 +46,9 @@ export default function Page() {
   const [tab, setTab] = useState<"kept" | "dropped">("kept");
   const [busy, setBusy] = useState(false);
   const [asked, setAsked] = useState(false);
+  // Chunks the reader has marked as containing the answer. For a question the
+  // benchmark does not cover, they are the only oracle available.
+  const [marked, setMarked] = useState<Record<string, { path: string; line: number }>>({});
   const [err, setErr] = useState<string | null>(null);
   const seq = useRef(0);
 
@@ -54,7 +57,7 @@ export default function Page() {
   }, []);
 
   const run = useCallback(
-    async (withMinimum = false) => {
+    async (withMinimum = false, anchors: { path: string; line: number }[] = []) => {
       const mine = ++seq.current;
       setBusy(true);
       setErr(null);
@@ -62,7 +65,7 @@ export default function Page() {
         const res = await fetch("/api/analyze", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ slug, question, budget, withMinimum }),
+          body: JSON.stringify({ slug, question, budget, withMinimum, anchors }),
         });
         const json = await res.json();
         // Drop responses from superseded requests so a slow one can't overwrite
@@ -80,6 +83,9 @@ export default function Page() {
   );
 
   useEffect(() => { setAsked(false); run(false); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [slug, question, budget]);
+  // Marks belong to one question on one repo; carrying them across would
+  // silently measure the wrong thing.
+  useEffect(() => { setMarked({}); }, [slug, question]);
 
   const presets = meta?.benchmark.filter((b) => b.slug === slug) ?? [];
   const r = data?.report;
@@ -158,7 +164,7 @@ export default function Page() {
 
         <div className="flex flex-col justify-end gap-2">
           <button
-            onClick={() => { setAsked(true); run(true); }}
+            onClick={() => { setAsked(true); run(true, Object.values(marked)); }}
             disabled={busy}
             className="rounded border border-sky-800 bg-sky-950/60 px-3 py-2 text-sm text-sky-300 disabled:opacity-50"
           >
@@ -176,13 +182,20 @@ export default function Page() {
             <div className="max-w-[15rem] text-xs leading-snug">
               {data.minimum ? (
                 data.minimum.found ? (
-                  <p className="text-neutral-400">
-                    Every anchor retrieved at{" "}
-                    <span className="font-mono text-emerald-400">{n(data.minimum.tokensUsed!)}</span> tokens
-                    <span className="text-neutral-600"> ({data.minimum.probes} probes)</span>
-                  </p>
+                  <div className="grid gap-0.5 text-neutral-400">
+                    <p>
+                      {data.minimum.source === "user-marked" ? "Your marked chunks" : "Every anchor"} retrieved at{" "}
+                      <span className="font-mono text-emerald-400">{n(data.minimum.tokensUsed!)}</span> tokens
+                      <span className="text-neutral-600"> ({data.minimum.probes} probes)</span>
+                    </p>
+                    {data.minimum.source === "user-marked" && (
+                      <p className="text-neutral-600">Measured against what you marked, not a pre-registered benchmark.</p>
+                    )}
+                  </div>
                 ) : (
-                  <p className="text-amber-400">No budget up to 64,000 retrieves every anchor.</p>
+                  <p className="text-amber-400">
+                    No budget up to 64,000 retrieves {data.minimum.source === "user-marked" ? "everything you marked" : "every anchor"}.
+                  </p>
                 )
               ) : (
                 <div className="grid gap-1 text-neutral-500">
@@ -195,8 +208,12 @@ export default function Page() {
                     neighbouring context is added.
                   </p>
                   <p className="text-neutral-600">
-                    No verified minimum: this question has no ground truth, so nothing here
-                    says the answer was actually retrieved.
+                    That is an upper bound, not a minimum — it is usually far more than the
+                    answer needs.
+                  </p>
+                  <p className="text-sky-500">
+                    Mark the chunk that answers your question in the Kept list below, then press
+                    this again for a real minimum.
                   </p>
                 </div>
               )}
@@ -269,7 +286,7 @@ export default function Page() {
             </p>
           )}
 
-          <div className="mb-3 flex gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             {(["kept", "dropped"] as const).map((t) => (
               <button
                 key={t}
@@ -281,17 +298,54 @@ export default function Page() {
                 {t === "kept" ? `Kept (${r.kept.length})` : `Dropped at this budget (${r.nearMisses.length})`}
               </button>
             ))}
+            {tab === "kept" && (
+              <span className="text-xs text-neutral-600">
+                {Object.keys(marked).length > 0
+                  ? `${Object.keys(marked).length} marked as containing the answer`
+                  : "Press + on a chunk that answers your question to measure its minimum"}
+              </span>
+            )}
           </div>
 
           <section className="overflow-hidden rounded-lg border border-neutral-800">
-            {(tab === "kept" ? r.kept : r.nearMisses.map((m) => ({ chunk: m.chunk, score: m.score, reason: "lost to the budget", hops: -1 }))).map((k) => (
-              <div key={k.chunk.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-neutral-800/70 px-3 py-2 font-mono text-xs last:border-0">
-                <span className="text-neutral-300">{k.chunk.path}</span>
-                <span className="text-neutral-600">:{k.chunk.startLine}-{k.chunk.endLine}</span>
-                <span className="text-neutral-500">{n(k.chunk.tokens)}t</span>
-                <span className={k.hops === 0 ? "text-sky-400" : k.hops > 0 ? "text-violet-400" : "text-red-400"}>{k.reason}</span>
-              </div>
-            ))}
+            {(tab === "kept" ? r.kept : r.nearMisses.map((m) => ({ chunk: m.chunk, score: m.score, reason: "lost to the budget", hops: -1 }))).map((k) => {
+              const isMarked = !!marked[k.chunk.id];
+              const markable = tab === "kept";
+              return (
+                <div
+                  key={k.chunk.id}
+                  className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-neutral-800/70 px-3 py-2 font-mono text-xs last:border-0 ${
+                    isMarked ? "bg-emerald-950/30" : ""
+                  }`}
+                >
+                  {markable && (
+                    <button
+                      onClick={() =>
+                        setMarked((prev) => {
+                          const next = { ...prev };
+                          if (next[k.chunk.id]) delete next[k.chunk.id];
+                          else next[k.chunk.id] = { path: k.chunk.path, line: k.chunk.startLine + 1 };
+                          return next;
+                        })
+                      }
+                      title="Mark this chunk as containing the answer"
+                      aria-pressed={isMarked}
+                      className={`rounded border px-1.5 leading-5 ${
+                        isMarked
+                          ? "border-emerald-700 bg-emerald-900/50 text-emerald-300"
+                          : "border-neutral-700 text-neutral-600 hover:border-neutral-500 hover:text-neutral-300"
+                      }`}
+                    >
+                      {isMarked ? "✓" : "+"}
+                    </button>
+                  )}
+                  <span className="text-neutral-300">{k.chunk.path}</span>
+                  <span className="text-neutral-600">:{k.chunk.startLine}-{k.chunk.endLine}</span>
+                  <span className="text-neutral-500">{n(k.chunk.tokens)}t</span>
+                  <span className={k.hops === 0 ? "text-sky-400" : k.hops > 0 ? "text-violet-400" : "text-red-400"}>{k.reason}</span>
+                </div>
+              );
+            })}
             {(tab === "kept" ? r.kept.length : r.nearMisses.length) === 0 && (
               <p className="px-3 py-4 text-xs text-neutral-500">Nothing here at this budget.</p>
             )}
