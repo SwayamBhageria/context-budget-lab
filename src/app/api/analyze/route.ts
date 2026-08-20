@@ -100,10 +100,12 @@ export async function POST(req: Request) {
     grep,
     recall,
     minimum,
-    // The dense baseline for this exact question, where one was precomputed.
-    // Shown because it beats this selector on eight of the nine benchmark
-    // questions, and hiding that would make the app an advert rather than an
-    // instrument.
+    // The dense baseline for this exact question, where one was precomputed on
+    // the same chunks. Shown because the two methods split the benchmark almost
+    // evenly and fail on different questions — and because an earlier run of this
+    // same comparison gave a very different tally purely because chunk
+    // granularity changed. Displaying only our own number would make the app an
+    // advert rather than an instrument.
     embedding:
       (embeddingBaseline as Record<string, { model: string; reached: boolean; minTokens: number | null }>)[
         `${slug}|${q}`

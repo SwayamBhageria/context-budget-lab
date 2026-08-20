@@ -2,7 +2,7 @@
  "karpathy/micrograd|how does backward propagate gradients through the graph?": {
   "model": "Xenova/all-MiniLM-L6-v2",
   "reached": true,
-  "minTokens": 567,
+  "minTokens": 571,
   "ranks": [
    {
     "path": "micrograd/engine.py",
@@ -12,80 +12,76 @@
    {
     "path": "micrograd/engine.py",
     "line": 59,
-    "rank": 1
+    "rank": 5
    }
   ],
   "topPaths": [
-   "micrograd/engine.py",
-   "README.md",
-   "setup.py",
-   "micrograd/nn.py"
+   "micrograd/engine.py"
   ]
  },
  "karpathy/nanoGPT|how is causal self-attention masked?": {
   "model": "Xenova/all-MiniLM-L6-v2",
   "reached": true,
-  "minTokens": 846,
+  "minTokens": 885,
   "ranks": [
    {
     "path": "model.py",
     "line": 49,
-    "rank": 2
+    "rank": 5
    },
    {
     "path": "model.py",
     "line": 68,
-    "rank": 2
+    "rank": 1
    }
   ],
   "topPaths": [
-   "model.py",
-   "README.md"
+   "model.py"
   ]
  },
  "karpathy/llm.c|how does the CPU reference implementation compute attention?": {
   "model": "Xenova/all-MiniLM-L6-v2",
   "reached": true,
-  "minTokens": 6630,
+  "minTokens": 6594,
   "ranks": [
    {
     "path": "train_gpt2.c",
     "line": 271,
-    "rank": 18
+    "rank": 21
    }
   ],
   "topPaths": [
    "dev/cuda/attention_backward.cu",
-   "dev/cuda/attention_forward.cu",
-   "dev/cuda/residual_forward.cu"
+   "dev/cuda/attention_forward.cu"
   ]
  },
  "pallets/flask|how does flask match a URL to a view function?": {
   "model": "Xenova/all-MiniLM-L6-v2",
   "reached": true,
-  "minTokens": 71736,
+  "minTokens": 28820,
   "ranks": [
    {
     "path": "src/flask/app.py",
     "line": 969,
-    "rank": 177
+    "rank": 78
    },
    {
     "path": "src/flask/sansio/app.py",
     "line": 605,
-    "rank": 50
+    "rank": 139
    }
   ],
   "topPaths": [
-   "src/flask/wrappers.py",
+   "src/flask/app.py",
+   "src/flask/sansio/app.py",
    "src/flask/helpers.py",
-   "src/flask/sansio/app.py"
+   "src/flask/wrappers.py"
   ]
  },
  "pmndrs/zustand|how does shallow compare Maps and Sets?": {
   "model": "Xenova/all-MiniLM-L6-v2",
   "reached": true,
-  "minTokens": 2055,
+  "minTokens": 2016,
   "ranks": [
    {
     "path": "src/vanilla/shallow.ts",
@@ -105,30 +101,29 @@
  "pmndrs/zustand|what does the devtools middleware connect to?": {
   "model": "Xenova/all-MiniLM-L6-v2",
   "reached": true,
-  "minTokens": 11446,
+  "minTokens": 13992,
   "ranks": [
    {
     "path": "src/middleware/devtools.ts",
     "line": 203,
-    "rank": 56
+    "rank": 76
    }
   ],
   "topPaths": [
    "docs/reference/middlewares/devtools.md",
-   "docs/learn/guides/beginner-typescript.md",
-   "docs/learn/guides/advanced-typescript.md",
-   "src/middleware.ts"
+   "src/middleware.ts",
+   "docs/learn/guides/beginner-typescript.md"
   ]
  },
  "pmndrs/zustand|how does persist know it has finished hydrating?": {
   "model": "Xenova/all-MiniLM-L6-v2",
   "reached": true,
-  "minTokens": 319,
+  "minTokens": 936,
   "ranks": [
    {
     "path": "src/middleware/persist.ts",
     "line": 354,
-    "rank": 3
+    "rank": 5
    }
   ],
   "topPaths": [
@@ -139,12 +134,12 @@
  "pmndrs/zustand|how does subscribeWithSelector decide whether to call the listener?": {
   "model": "Xenova/all-MiniLM-L6-v2",
   "reached": true,
-  "minTokens": 387,
+  "minTokens": 294,
   "ranks": [
    {
     "path": "src/middleware/subscribeWithSelector.ts",
     "line": 54,
-    "rank": 2
+    "rank": 1
    }
   ],
   "topPaths": [
@@ -156,24 +151,24 @@
  "pmndrs/zustand|why might a component not re-render after a state change?": {
   "model": "Xenova/all-MiniLM-L6-v2",
   "reached": true,
-  "minTokens": 34833,
+  "minTokens": 66372,
   "ranks": [
    {
     "path": "src/react.ts",
     "line": 30,
-    "rank": 136
+    "rank": 395
    },
    {
     "path": "src/vanilla.ts",
     "line": 79,
-    "rank": 168
+    "rank": 131
    }
   ],
   "topPaths": [
    "docs/reference/hooks/use-shallow.md",
    "README.md",
-   "docs/reference/middlewares/persist.md",
-   "docs/reference/migrations/migrating-to-v5.md"
+   "src/middleware/persist.ts",
+   "docs/reference/middlewares/persist.md"
   ]
  }
 }

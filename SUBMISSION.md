@@ -115,34 +115,42 @@ weakest results, flask at 1.1× and the hard zustand question at 0.4×, are the 
 questions phrased entirely in their domain's own vocabulary, where no term is
 selective and every method degrades together.
 
-### The shipped selector is the wrong one for this corpus
+### The method comparison is not stable, and that is the result
 
 A dense baseline (all-MiniLM-L6-v2, run locally, no API) measured on the same
-questions and the same ground truth:
+questions, the same ground truth, and the same chunks.
 
 | Question | BM25+graph | Embeddings |
 |---|---:|---:|
-| llm.c: CPU attention | 66,385 | **6,630** |
-| zustand: why no re-render | 87,073 | **34,833** |
-| zustand: devtools | 15,603 | **11,446** |
-| zustand: persist | 4,038 | **319** |
-| zustand: shallow | 2,245 | **2,055** |
-| zustand: subscribeWithSelector | 616 | **387** |
-| nanoGPT: causal mask | 1,077 | **846** |
-| micrograd: backward | 567 | 567 |
-| flask: URL to view | **46,047** | 71,736 |
+| micrograd: backward | 1,475 | **571** |
+| nanoGPT: causal mask | 1,199 | **885** |
+| llm.c: CPU attention | 65,521 | **6,594** |
+| flask: URL to view | **21,989** | 28,820 |
+| zustand: shallow | **1,257** | 2,016 |
+| zustand: devtools | **7,277** | 13,992 |
+| zustand: persist | 13,890 | **936** |
+| zustand: subscribeWithSelector | 2,253 | **294** |
+| zustand: why no re-render | **63,043** | 66,372 |
 
-**Embeddings win eight of nine**, by 10× on llm.c and 12× on persist. On an
-earlier JavaScript corpus the two traded wins roughly evenly. So which retriever
-is "better" is a property of the corpus, not the algorithm — and I shipped the
-one that loses on this one.
+Five to four for embeddings — close to a coin flip.
 
-I would not undo that choice, but I would not hide the cost either. BM25 was
-chosen because it runs free in single-digit milliseconds with no key, no vector
-store and no warm index, which is what makes a live budget slider and a keyless
-public demo possible at all. That deployability costs real accuracy, and the
-measurement above is what it costs. Both numbers are shown side by side in the
-app for the same reason.
+The reason this section is framed as a caution rather than a result: **an earlier
+run of exactly this comparison gave eight to one for embeddings.** Both runs were
+internally fair, each measuring both methods on identical chunks. The only thing
+that changed between them was chunk granularity — an implementation detail that
+touches neither retriever.
+
+Nine questions is not enough to rank two retrieval methods. A conclusion that
+flips from 8–1 to 5–4 because chunk boundaries moved is not a conclusion about
+the methods, and I am not going to present one. What can be said is narrower and
+survives both runs: the two fail on different questions, so their errors are not
+correlated, which is an argument for hybrid retrieval rather than for either one.
+
+BM25 is what ships, and that choice stands on deployability: it runs free in
+single-digit milliseconds with no key, no vector store and no warm index, which
+is what makes a keyless public demo and a live budget slider possible. Both
+numbers are shown side by side in the app so a reader can see the tradeoff rather
+than take my word for it.
 
 ### The index matters more than the algorithm
 
