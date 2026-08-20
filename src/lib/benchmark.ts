@@ -93,6 +93,24 @@ export const BENCHMARK: BenchmarkCase[] = [
       "The question is phrased as a symptom while the answer is a mechanism. Every word in it — component, state, change, render — appears throughout the repo, so BM25 has no rare term to grip, and the code that answers it (useSyncExternalStore, a listeners.forEach notify) shares no vocabulary with the question at all. Embeddings do not rescue this: measured on the same chunks with all-MiniLM-L6-v2, the ten nearest neighbours are all markdown, and the two answer sites rank 134th and 170th — 31,505 and 38,628 tokens deep. Both methods are pulled to documentation that discusses re-rendering rather than the code that implements it. It stays in the suite on purpose: a benchmark where every question passes is a benchmark whose questions were chosen to pass.",
   },
   {
+    slug: "pallets/flask",
+    question: "how does flask match a URL to a view function?",
+    anchors: [
+      { path: "src/flask/app.py", line: 969, holds: "dispatch_request — resolves the matched rule to a view (grep 'def dispatch_request')" },
+      { path: "src/flask/sansio/app.py", line: 605, holds: "add_url_rule — registers the URL rule against an endpoint (grep 'def add_url_rule')" },
+    ],
+    expectation: "should-pass",
+  },
+  {
+    slug: "gin-gonic/gin",
+    question: "how does gin match a request path to a handler?",
+    anchors: [
+      { path: "gin.go", line: 690, holds: "handleHTTPRequest — picks the method tree and dispatches (grep 'handleHTTPRequest')" },
+      { path: "tree.go", line: 418, holds: "node.getValue — the radix tree lookup doing the actual match (grep 'getValue')" },
+    ],
+    expectation: "should-pass",
+  },
+  {
     slug: "vercel/swr",
     question: "what is the deduping interval and where is it enforced?",
     anchors: [

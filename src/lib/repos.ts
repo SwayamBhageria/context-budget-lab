@@ -3,6 +3,8 @@ import { buildGraph } from "./ingest/graph";
 import clsx from "@/fixtures/lukeed__clsx.json";
 import swr from "@/fixtures/vercel__swr.json";
 import zustand from "@/fixtures/pmndrs__zustand.json";
+import flask from "@/fixtures/pallets__flask.json";
+import gin from "@/fixtures/gin-gonic__gin.json";
 
 /**
  * Repositories are indexed at build time and shipped as fixtures rather than
@@ -11,7 +13,7 @@ import zustand from "@/fixtures/pmndrs__zustand.json";
  * reviewer sees must be the numbers that were measured, not whatever HEAD
  * happens to be that morning. Each fixture records the ref it was built from.
  */
-const RAW = [clsx, swr, zustand] as unknown as {
+const RAW = [clsx, swr, flask, gin, zustand] as unknown as {
   slug: string;
   question: string;
   budget: number;
