@@ -455,7 +455,23 @@ export default function Page() {
               );
             })}
             {(tab === "kept" ? r.kept.length : r.nearMisses.length) === 0 && (
-              <p className="px-3 py-4 text-xs text-neutral-500">Nothing here at this budget.</p>
+              <div className="px-3 py-4 text-xs leading-relaxed text-neutral-500">
+                {tab !== "kept" ? (
+                  <p>Nothing was dropped at this budget.</p>
+                ) : r.saturationTokens === 0 ? (
+                  <>
+                    <p className="text-neutral-300">No chunk in this repository matched the question.</p>
+                    <p className="mt-1">
+                      Every term scored below the noise floor, so there was nothing to select and
+                      nothing to expand from — the budget was never the constraint. This is exactly
+                      what a lexical retriever does when a question shares no vocabulary with the
+                      code. Name a symbol, file or identifier you expect to exist.
+                    </p>
+                  </>
+                ) : (
+                  <p>Nothing fits at this budget — raise it.</p>
+                )}
+              </div>
             )}
           </section>
 
