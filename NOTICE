@@ -1,0 +1,23 @@
+# Third-party source redistributed in this repository
+
+`src/fixtures/*.json` contains verbatim source extracted from the repositories
+below, indexed at build time so the demo does not depend on GitHub availability
+and so the numbers shown are the numbers that were measured.
+
+Each project's own licence governs its code. All are permissive and all require
+their copyright notice to be retained on redistribution, which is the purpose of
+this file.
+
+| Project | Licence | Source |
+|---|---|---|
+| karpathy/micrograd | MIT — Copyright (c) 2020 Andrej Karpathy | https://github.com/karpathy/micrograd |
+| karpathy/nanoGPT | MIT — Copyright (c) 2022 Andrej Karpathy | https://github.com/karpathy/nanoGPT |
+| karpathy/llm.c | MIT — Copyright (c) 2024 Andrej Karpathy | https://github.com/karpathy/llm.c |
+| pallets/flask | BSD-3-Clause — Copyright (c) 2010 Pallets | https://github.com/pallets/flask |
+| pmndrs/zustand | MIT — Copyright (c) 2019 Paul Henschel | https://github.com/pmndrs/zustand |
+
+Repositories fetched live at runtime are not redistributed — they are downloaded
+by the visitor's request, held in memory, and never written to this repository.
+
+No modifications are made to the source. It is split into chunks and
+token-counted for measurement; the text itself is unchanged.
