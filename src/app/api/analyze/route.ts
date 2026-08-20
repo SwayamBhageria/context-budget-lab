@@ -63,9 +63,9 @@ export async function POST(req: Request) {
   const minimum = !withMinimum
     ? null
     : marked.length > 0
-      ? findMinimumBudget(loaded.repo, q, marked, loaded.graph, 64000, "user-marked")
+      ? findMinimumBudget(loaded.repo, q, marked, loaded.graph, loaded.repo.naiveTokens, "user-marked")
       : bench
-        ? findMinimumBudget(loaded.repo, q, bench.anchors, loaded.graph, 64000, "benchmark")
+        ? findMinimumBudget(loaded.repo, q, bench.anchors, loaded.graph, loaded.repo.naiveTokens, "benchmark")
         : null;
 
   return NextResponse.json({

@@ -191,8 +191,8 @@ export default function Page() {
               <span className="text-[11px] leading-snug text-neutral-500">
                 Docs share vocabulary with questions; code does not, so they crowd out the
                 implementation. Turning this off drops zustand&apos;s devtools question from 15,042
-                tokens to 3,176 and makes the unanswerable one resolve at 7,036 — but costs clsx 29%,
-                where the README really is the best explanation.
+                tokens to 3,147, and &quot;why no re-render&quot; from 88,244 to 7,036. Across the
+                suite it helps or does nothing — it never costs.
               </span>
             </span>
           </label>
@@ -250,7 +250,7 @@ export default function Page() {
                   </div>
                 ) : (
                   <p className="text-amber-400">
-                    No budget up to 64,000 retrieves {data.minimum.source === "user-marked" ? "everything you marked" : "every anchor"}.
+                    Not retrieved at any budget, even sending {data.minimum.source === "user-marked" ? "everything you marked" : "the whole repository"}.
                   </p>
                 )
               ) : (

@@ -22,8 +22,8 @@ console.log("-".repeat(95));
 
 for (const c of BENCHMARK) {
   const { repo, graph } = repoFor(c.slug);
-  const m = findMinimumBudget(repo, c.question, c.anchors, graph, 64000, "benchmark");
-  const at = m.found ? m.minBudget! : 64000;
+  const m = findMinimumBudget(repo, c.question, c.anchors, graph, repo.naiveTokens, "benchmark");
+  const at = m.found ? m.minBudget! : repo.naiveTokens;
   const r = select(repo, c.question, at, graph);
   const g = grepBaseline(repo, c.question, r.kept.map((k) => k.chunk.path));
   const ratio = m.found && g.bestTokens > 0 ? (g.bestTokens / m.tokensUsed!).toFixed(1) + "x" : "—";
