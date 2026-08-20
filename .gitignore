@@ -40,3 +40,6 @@ next-env.d.ts
 
 # local verification artifacts
 /scratch
+
+# assignment write-up, delivered privately not published
+SUBMISSION.md
