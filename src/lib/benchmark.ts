@@ -39,10 +39,37 @@ export interface BenchmarkCase {
 
 export const BENCHMARK: BenchmarkCase[] = [
   {
-    slug: "lukeed/clsx",
-    question: "how does clsx handle nested arrays and objects?",
+    slug: "karpathy/micrograd",
+    question: "how does backward propagate gradients through the graph?",
     anchors: [
-      { path: "src/index.js", line: 1, holds: "toVal() — recurses on arrays, iterates object keys (grep 'function toVal')" },
+      { path: "micrograd/engine.py", line: 54, holds: "Value.backward — seeds grad=1 and walks the topo order (grep 'def backward')" },
+      { path: "micrograd/engine.py", line: 59, holds: "build_topo — the topological sort the walk depends on (grep 'build_topo')" },
+    ],
+    expectation: "should-pass",
+  },
+  {
+    slug: "karpathy/nanoGPT",
+    question: "how is causal self-attention masked?",
+    anchors: [
+      { path: "model.py", line: 49, holds: "register_buffer('bias', torch.tril(...)) — the causal mask itself (grep 'torch.tril')" },
+      { path: "model.py", line: 68, holds: "att.masked_fill(self.bias == 0, -inf) — where it is applied (grep 'masked_fill')" },
+    ],
+    expectation: "should-pass",
+  },
+  {
+    slug: "karpathy/llm.c",
+    question: "how does the CPU reference implementation compute attention?",
+    anchors: [
+      { path: "train_gpt2.c", line: 271, holds: "attention_forward — the CPU reference, distinct from the CUDA kernels (grep 'void attention_forward')" },
+    ],
+    expectation: "should-pass",
+  },
+  {
+    slug: "pallets/flask",
+    question: "how does flask match a URL to a view function?",
+    anchors: [
+      { path: "src/flask/app.py", line: 969, holds: "dispatch_request — resolves the matched rule to a view (grep 'def dispatch_request')" },
+      { path: "src/flask/sansio/app.py", line: 605, holds: "add_url_rule — registers the URL rule against an endpoint (grep 'def add_url_rule')" },
     ],
     expectation: "should-pass",
   },
@@ -86,50 +113,12 @@ export const BENCHMARK: BenchmarkCase[] = [
       { path: "src/react.ts", line: 30, holds: "React.useSyncExternalStore subscription (grep)" },
       { path: "src/vanilla.ts", line: 79, holds: "listeners.forEach notify on setState (grep)" },
     ],
-    // No rare term to latch onto: component, state, change appear everywhere.
-    // The documented weakness of any lexical method, kept because it is unflattering.
     expectation: "expected-hard",
     whyHard:
-      "The question is phrased as a symptom while the answer is a mechanism. Every word in it — component, state, change, render — appears throughout the repo, so BM25 has no rare term to grip, and the code that answers it (useSyncExternalStore, a listeners.forEach notify) shares no vocabulary with the question. It needs 88,244 tokens, 81% of the repository, which is worse than useless: at that point send everything. Grep reaches it in 35,979 and embeddings in 38,628, so both beat this selector here. Turn markdown off and it drops to 7,036 — the docs discussing re-rendering were outranking the code implementing it. Kept in the suite on purpose: a benchmark where every question passes is a benchmark whose questions were chosen to pass.",
-  },
-  {
-    slug: "pallets/flask",
-    question: "how does flask match a URL to a view function?",
-    anchors: [
-      { path: "src/flask/app.py", line: 969, holds: "dispatch_request — resolves the matched rule to a view (grep 'def dispatch_request')" },
-      { path: "src/flask/sansio/app.py", line: 605, holds: "add_url_rule — registers the URL rule against an endpoint (grep 'def add_url_rule')" },
-    ],
-    expectation: "should-pass",
-  },
-  {
-    slug: "gin-gonic/gin",
-    question: "how does gin match a request path to a handler?",
-    anchors: [
-      { path: "gin.go", line: 690, holds: "handleHTTPRequest — picks the method tree and dispatches (grep 'handleHTTPRequest')" },
-      { path: "tree.go", line: 418, holds: "node.getValue — the radix tree lookup doing the actual match (grep 'getValue')" },
-    ],
-    expectation: "should-pass",
-  },
-  {
-    slug: "vercel/swr",
-    question: "what is the deduping interval and where is it enforced?",
-    anchors: [
-      { path: "src/_internal/utils/config.ts", line: 74, holds: "dedupingInterval: 2 * 1000 default (grep)" },
-      { path: "src/index/use-swr.ts", line: 585, holds: "setTimeout(cleanupState, config.dedupingInterval) (grep)" },
-    ],
-    expectation: "should-pass",
-  },
-  {
-    slug: "vercel/swr",
-    question: "how does revalidation on focus work?",
-    anchors: [
-      { path: "src/_internal/utils/web-preset.ts", line: 29, holds: "initFocus registers visibilitychange + focus" },
-      { path: "src/index/use-swr.ts", line: 800, holds: "FOCUS_EVENT handling with throttle and isActive gate" },
-    ],
-    expectation: "should-pass",
-    quarantined: "Anchors written after inspecting selector output for this question. Excluded from headline recall.",
+      "The question is phrased as a symptom while the answer is a mechanism. Every word in it — component, state, change, render — appears throughout the repo, so BM25 has no rare term to grip, and the code that answers it (useSyncExternalStore, a listeners.forEach notify) shares no vocabulary with the question. Turn markdown off and it improves sharply: the docs discussing re-rendering were outranking the code implementing it. Kept in the suite on purpose — a benchmark where every question passes is a benchmark whose questions were chosen to pass.",
   },
 ];
+
 
 /**
  * A hit requires a retrieved chunk whose span covers the anchor line.

@@ -16,6 +16,8 @@ type Analysis = {
   files: number;
   chunks: number;
   includeMarkdown: boolean;
+  live: boolean;
+  coverage: { pct: number; skippedByExt: Record<string, number> } | null;
   report: {
     selectedTokens: number;
     reductionPct: number;
@@ -44,6 +46,7 @@ export default function Page() {
   const [question, setQuestion] = useState("how does revalidation on focus work?");
   const [budget, setBudget] = useState(8000);
   const [includeMarkdown, setIncludeMarkdown] = useState(true);
+  const [custom, setCustom] = useState("");
   const [data, setData] = useState<Analysis | null>(null);
   const [tab, setTab] = useState<"kept" | "dropped">("kept");
   const [busy, setBusy] = useState(false);
@@ -151,6 +154,35 @@ export default function Page() {
                 </option>
               ))}
             </select>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const v = custom.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
+                if (/^[\w.-]+\/[\w.-]+$/.test(v)) setSlug(v);
+              }}
+              className="mt-1 flex gap-1.5"
+            >
+              <input
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+                placeholder="or any public repo — owner/name"
+                className="min-w-0 flex-1 rounded border border-neutral-800 bg-neutral-950 px-2 py-1 font-mono text-xs placeholder:text-neutral-600"
+              />
+              <button
+                type="submit"
+                className="rounded border border-neutral-700 px-2 py-1 text-xs text-neutral-400 hover:border-neutral-500 hover:text-neutral-200"
+              >
+                Index
+              </button>
+            </form>
+            {data?.live && (
+              <p className="text-[11px] leading-snug text-amber-600/90">
+                Indexed live from GitHub{data.coverage ? `, ${Math.round(data.coverage.pct)}% of its source` : ""}.
+                No pre-registered ground truth, so no recall is shown — mark the chunk that answers your
+                question to measure a minimum. Repos over 2.5MB of source are refused rather than
+                partially indexed.
+              </p>
+            )}
           </label>
 
           <label className="grid gap-1">

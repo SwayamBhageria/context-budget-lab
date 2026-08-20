@@ -14,7 +14,12 @@ import { getEncoding } from "js-tiktoken";
 const enc = getEncoding("cl100k_base");
 
 export function countTokens(text: string): number {
-  return enc.encode(text).length;
+  // Special tokens must be allowed, not rejected. By default the encoder throws
+  // on strings like <|endoftext|>, which appear as ordinary source text
+  // throughout ML codebases — nanoGPT, minGPT, whisper, tiktoken and vllm were
+  // all unreadable until this was passed. A tokenizer that refuses the corpus
+  // the tool is aimed at is not a tokenizer error, it is a missing argument.
+  return enc.encode(text, "all").length;
 }
 
 export const TOKENIZER_NOTE =

@@ -26,6 +26,13 @@ export interface Repo {
   chunks: Chunk[];
   /** Total tokens of every file concatenated — the "send everything" baseline. */
   naiveTokens: number;
+  /** What fraction of the repository's source actually made it into the index. */
+  coverage?: {
+    indexedBytes: number;
+    seenBytes: number;
+    pct: number;
+    skippedByExt: Record<string, number>;
+  };
 }
 
 export type DropReason =
