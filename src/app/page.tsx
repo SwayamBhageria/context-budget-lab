@@ -43,8 +43,12 @@ const n = (v: number) => v.toLocaleString("en-US");
 
 export default function Page() {
   const [meta, setMeta] = useState<Meta | null>(null);
-  const [slug, setSlug] = useState("vercel/swr");
-  const [question, setQuestion] = useState("how does revalidation on focus work?");
+  // Empty until the corpus loads, then taken from it. Hardcoding a default slug
+  // meant that removing a repo from the corpus left the page silently
+  // live-fetching it from GitHub on every load, showing a repository the
+  // benchmark no longer contains.
+  const [slug, setSlug] = useState("");
+  const [question, setQuestion] = useState("");
   const [budget, setBudget] = useState(8000);
   const [includeMarkdown, setIncludeMarkdown] = useState(true);
   const [custom, setCustom] = useState("");
@@ -64,7 +68,17 @@ export default function Page() {
   const [jump, setJump] = useState(false);
 
   useEffect(() => {
-    fetch("/api/analyze").then((r) => r.json()).then(setMeta).catch(() => {});
+    fetch("/api/analyze")
+      .then((r) => r.json())
+      .then((m: Meta) => {
+        setMeta(m);
+        const first = m.repos?.[0];
+        if (first) {
+          setSlug(first.slug);
+          setQuestion(m.benchmark.find((b) => b.slug === first.slug)?.question ?? first.defaultQuestion);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const run = useCallback(
@@ -93,7 +107,12 @@ export default function Page() {
     [slug, question, budget, includeMarkdown],
   );
 
-  useEffect(() => { setAsked(false); run(false); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [slug, question, budget, includeMarkdown]);
+  useEffect(() => {
+    if (!slug || !question) return; // nothing to ask until the corpus has loaded
+    setAsked(false);
+    run(false);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [slug, question, budget, includeMarkdown]);
   // Marks belong to one question on one repo; carrying them across would
   // silently measure the wrong thing.
   useEffect(() => { setMarked({}); }, [slug, question]);
