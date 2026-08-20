@@ -106,6 +106,13 @@ No API key is required for indexing, scoring, selection, or any reported number.
 | `scripts/pick-corpus.ts` | How the corpus was chosen |
 | `scripts/verify-ui.ts` | Headless smoke test of the deployed app |
 
+## Licence and attribution
+
+This project is MIT (see `LICENSE`). The fixtures redistribute source from
+micrograd, nanoGPT, llm.c, flask and zustand under their own licences — see
+`NOTICE` for the required copyright attributions. Live-fetched repositories are
+never redistributed; they are downloaded on request and held in memory only.
+
 ## Known limits
 
 - Nine questions is a small suite. Enough to show shape and to surface eleven
