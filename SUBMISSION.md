@@ -183,6 +183,44 @@ corpus it was measured on.** flask still sits at 1.1× here. Nine questions acro
 five repositories is enough to show that the spread is wide; it is not enough to
 claim a general figure, and I have not quoted one.
 
+## Chunk quality does not predict retrieval quality
+
+The chunker only treated a declaration at column zero as a boundary, so methods
+inside a class were invisible and long classes were sliced blindly every 80
+lines. flask force-split 33% of its chunks that way — the worst in the corpus,
+against 9% for the C repository that supposedly wasn't supported.
+
+Fixing it improved every structural metric: flask's force-splits fell to 2%, and
+chunks carrying a recognised symbol rose from 63% to 90% on llm.c and 39% to 58%
+on nanoGPT.
+
+Retrieval did not follow.
+
+| Question | Before | After |
+|---|---:|---:|
+| flask: URL to view | 1.1× | **2.4×** |
+| zustand: shallow | 3.4× | **6.1×** |
+| zustand: devtools | 2.2× | **4.7×** |
+| zustand: why no re-render | 0.4× | 0.6× |
+| llm.c: CPU attention | 2.4× | 2.5× |
+| nanoGPT: causal mask | 3.8× | 3.5× |
+| micrograd: backward | 1.4× | **0.5×** |
+| zustand: persist | 4.0× | **1.1×** |
+| zustand: subscribeWithSelector | 2.9× | **0.8×** |
+
+Four better, four worse, one flat; mean advantage 2.4× to 2.5×. Finer chunks are
+cheaper to include but weaker signals individually, because each carries fewer
+surrounding terms. **A chunker that scores better on boundary quality is not
+therefore a better retriever**, and I would have shipped this as an improvement
+on the strength of "33% to 2%" alone had I not re-run the benchmark.
+
+Kept anyway, on grounds that are not the mean: a method is a declaration, so the
+old behaviour was structurally wrong; blind cuts can land mid-function, which is
+a correctness risk regardless of average performance; and flask, the repository
+most like real work, improved 2.2×. `MIN_LINES` is deliberately not tuned to
+recover the losses — tuning a parameter against this benchmark would make the
+benchmark meaningless.
+
 ## Decisions, and five things measurement reversed
 
 **BM25 rather than embeddings, as the shipped selector.** Embeddings need a

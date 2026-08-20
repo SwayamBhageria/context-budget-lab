@@ -30,8 +30,17 @@ export function chunkFile(path: string, text: string): Omit<Chunk, "tokens">[] {
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
-    // A top-level declaration (no leading whitespace) starts a new chunk.
-    if (line.length > 0 && !/^\s/.test(line) && (DECL.test(line) || C_DECL.test(line))) {
+    if (line.length === 0) continue;
+    const indented = /^\s/.test(line);
+    const body = line.trimStart();
+
+    // Methods inside a class are declarations too. Requiring column zero meant
+    // every method was invisible and a long class was sliced blindly every 80
+    // lines — flask force-split 33% of its chunks that way, the worst in the
+    // corpus, against 9% for llm.c. C-style definitions stay column-anchored,
+    // since the structural pattern is loose enough to match indented call
+    // expressions if it is allowed to float.
+    if (indented ? DECL.test(body) : DECL.test(body) || C_DECL.test(line)) {
       starts.push(i);
     }
   }
@@ -72,11 +81,18 @@ export function chunkFile(path: string, text: string): Omit<Chunk, "tokens">[] {
 }
 
 const DEF_NAME =
-  /\b(?:function|class|interface|type|enum|def|struct|fn|const|let|var)\s+([A-Za-z_$][\w$]*)/g;
+  /\b(?:function|class|interface|type|enum|def|struct|fn|func|impl|typedef)\s+([A-Za-z_$][\w$]*)|\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g;
+
+/** C-style definitions carry no keyword: the name is whatever precedes the paren. */
+const C_DEF_NAME = /^(?:[A-Za-z_]\w*\s+|\*)+\**([A-Za-z_]\w*)\s*\([^;]*$/gm;
 
 /** Names this chunk introduces — the hooks the import graph joins on. */
 export function definedSymbols(text: string): string[] {
   const out = new Set<string>();
-  for (const m of text.matchAll(DEF_NAME)) out.add(m[1]);
+  for (const m of text.matchAll(DEF_NAME)) {
+    const name = m[1] ?? m[2];
+    if (name) out.add(name);
+  }
+  for (const m of text.matchAll(C_DEF_NAME)) out.add(m[1]);
   return [...out];
 }
