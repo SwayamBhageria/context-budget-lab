@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { loadRepo } from "@/lib/repos";
+import { loadRepo, loadLiveRepo, isFixture } from "@/lib/repos";
 import { select } from "@/lib/select";
 import { grepBaseline } from "@/lib/select/baseline";
 import { BENCHMARK, measureCase } from "@/lib/benchmark";
@@ -26,8 +26,24 @@ export async function POST(req: Request) {
   }
 
   const withMd = includeMarkdown !== false;
-  const loaded = loadRepo(slug, withMd);
-  if (!loaded) return NextResponse.json({ error: `unknown repo: ${slug}` }, { status: 404 });
+
+  // owner/repo, GitHub's own rules: alphanumerics, dot, dash, underscore.
+  if (!/^[\w.-]+\/[\w.-]+$/.test(slug)) {
+    return NextResponse.json({ error: "expected owner/repo" }, { status: 400 });
+  }
+
+  let loaded;
+  if (isFixture(slug)) {
+    loaded = loadRepo(slug, withMd)!;
+  } else {
+    try {
+      loaded = await loadLiveRepo(slug, withMd);
+    } catch (e) {
+      const err = e as Error;
+      const status = err.name === "RepoTooLarge" ? 413 : /returned 404/.test(err.message) ? 404 : 502;
+      return NextResponse.json({ error: err.message, live: true }, { status });
+    }
+  }
 
   const report = select(loaded.repo, q, Math.floor(b), loaded.graph);
   const grep = grepBaseline(loaded.repo, q, report.kept.map((k) => k.chunk.path));
@@ -73,6 +89,8 @@ export async function POST(req: Request) {
     question: q,
     note: loaded.note,
     includeMarkdown: withMd,
+    live: !isFixture(slug),
+    coverage: loaded.repo.coverage ?? null,
     repoTokens: loaded.repo.naiveTokens,
     codeTokens: loaded.codeTokens,
     files: loaded.repo.files.length,

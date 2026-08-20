@@ -9,7 +9,16 @@ import type { Chunk } from "@/lib/types";
  * whole enough to be understandable. Indentation-anchored splitting gets that
  * for every C-family and Python-family language at once.
  */
-const DECL = /^(export\s+)?(async\s+)?(function|class|const|let|var|interface|type|enum|def|struct|impl|fn|func|package|public|private|protected)\b/;
+const DECL = /^(export\s+)?(async\s+)?(function|class|const|let|var|interface|type|enum|def|struct|impl|fn|func|package|public|private|protected|typedef|template|namespace)\b/;
+
+/**
+ * C-family definitions carry no keyword — `void gpt2_forward(GPT2 *m) {` starts
+ * with its return type. Matched structurally instead: a line at column zero made
+ * of identifier words, then a name, then an open paren, not ending in a
+ * semicolon (which would be a prototype, not a definition). Qualifiers like
+ * static, inline and __global__ are just identifiers, so they fall out for free.
+ */
+const C_DECL = /^(?:[A-Za-z_][\w]*\s+|\*)+\**[A-Za-z_]\w*\s*\([^;]*$/;
 
 /** Chunks larger than this are split again; smaller ones absorb their neighbour. */
 const MAX_LINES = 80;
@@ -22,7 +31,7 @@ export function chunkFile(path: string, text: string): Omit<Chunk, "tokens">[] {
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
     // A top-level declaration (no leading whitespace) starts a new chunk.
-    if (line.length > 0 && !/^\s/.test(line) && DECL.test(line)) {
+    if (line.length > 0 && !/^\s/.test(line) && (DECL.test(line) || C_DECL.test(line))) {
       starts.push(i);
     }
   }

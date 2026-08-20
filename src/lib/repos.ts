@@ -1,10 +1,10 @@
 import type { Repo } from "./types";
 import { buildGraph } from "./ingest/graph";
-import clsx from "@/fixtures/lukeed__clsx.json";
-import swr from "@/fixtures/vercel__swr.json";
-import zustand from "@/fixtures/pmndrs__zustand.json";
+import micrograd from "@/fixtures/karpathy__micrograd.json";
+import nanogpt from "@/fixtures/karpathy__nanoGPT.json";
+import llmc from "@/fixtures/karpathy__llm.c.json";
 import flask from "@/fixtures/pallets__flask.json";
-import gin from "@/fixtures/gin-gonic__gin.json";
+import zustand from "@/fixtures/pmndrs__zustand.json";
 
 /**
  * Repositories are indexed at build time and shipped as fixtures rather than
@@ -13,7 +13,7 @@ import gin from "@/fixtures/gin-gonic__gin.json";
  * reviewer sees must be the numbers that were measured, not whatever HEAD
  * happens to be that morning. Each fixture records the ref it was built from.
  */
-const RAW = [clsx, swr, flask, gin, zustand] as unknown as {
+const RAW = [micrograd, nanogpt, llmc, flask, zustand] as unknown as {
   slug: string;
   question: string;
   budget: number;
@@ -82,7 +82,11 @@ export function loadRepo(slug: string, includeMarkdown = true): LoadedRepo | nul
 }
 
 export function listRepos() {
-  return RAW.map((r) => ({
+  // Smallest first: the ordering is itself part of the argument, since the
+  // technique is worthless at the top of the list and decisive at the bottom.
+  return [...RAW]
+    .sort((a, b) => a.repo.naiveTokens - b.repo.naiveTokens)
+    .map((r) => ({
     slug: r.slug,
     note: r.note,
     defaultQuestion: r.question,
@@ -90,4 +94,43 @@ export function listRepos() {
     chunks: r.repo.chunks.length,
     tokens: r.repo.naiveTokens,
   }));
+}
+
+
+/**
+ * Live repositories, indexed on demand.
+ *
+ * Cached per warm instance only — serverless instances are stateless across cold
+ * starts, so a repeat question may re-index. That is a latency cost, never a
+ * correctness one, and re-indexing is deterministic.
+ */
+const live = new Map<string, LoadedRepo>();
+const LIVE_MAX = 3;
+
+export async function loadLiveRepo(slug: string, includeMarkdown = true): Promise<LoadedRepo> {
+  const key = `${slug}|${includeMarkdown ? "all" : "code"}`;
+  const hit = live.get(key);
+  if (hit) return hit;
+
+  const { fetchRepo } = await import("./ingest/github");
+  const full = await fetchRepo(slug, "HEAD");
+  const repo = includeMarkdown ? full : codeOnly(full);
+  const loaded: LoadedRepo = {
+    slug,
+    note: "Indexed live from GitHub. No pre-registered ground truth — mark the chunk that answers your question to measure a minimum.",
+    defaultQuestion: "",
+    defaultBudget: 8000,
+    repo,
+    graph: buildGraph(repo.files),
+    codeTokens: full.files.filter((f) => !f.path.endsWith(".md")).reduce((a, f) => a + f.tokens, 0),
+  };
+
+  // Bounded so a session of live lookups cannot exhaust the instance.
+  if (live.size >= LIVE_MAX) live.delete(live.keys().next().value!);
+  live.set(key, loaded);
+  return loaded;
+}
+
+export function isFixture(slug: string): boolean {
+  return RAW.some((r) => r.slug === slug);
 }

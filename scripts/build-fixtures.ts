@@ -6,16 +6,22 @@ import { grepBaseline } from "../src/lib/select/baseline";
 
 export const FIXTURES = [
   {
-    slug: "lukeed/clsx",
-    question: "how does clsx handle nested arrays and objects?",
+    slug: "karpathy/micrograd",
+    question: "how does backward propagate gradients through the graph?",
     budget: 2000,
-    note: "Small enough that selection barely earns its place.",
+    note: "2k tokens. Small enough that selection cannot earn its place.",
   },
   {
-    slug: "vercel/swr",
-    question: "how does revalidation on focus work?",
+    slug: "karpathy/nanoGPT",
+    question: "how is causal self-attention masked?",
     budget: 8000,
-    note: "The working zone: too big to send casually, small enough to verify.",
+    note: "The working zone, and the most recognisable repo in the corpus.",
+  },
+  {
+    slug: "karpathy/llm.c",
+    question: "how does the CPU reference implementation compute attention?",
+    budget: 8000,
+    note: "C, not Python. Tests the chunker outside the languages it was built for.",
   },
   {
     slug: "pallets/flask",
@@ -24,16 +30,10 @@ export const FIXTURES = [
     note: "Code-heavy Python: 1% markdown, the counter-case to zustand.",
   },
   {
-    slug: "gin-gonic/gin",
-    question: "how does gin match a request path to a handler?",
-    budget: 8000,
-    note: "Largest and a third language: 219k tokens of mostly Go.",
-  },
-  {
     slug: "pmndrs/zustand",
     question: "how does the persist middleware rehydrate state?",
     budget: 8000,
-    note: "Large enough that sending everything has a real price.",
+    note: "89% markdown. The repo that made the documentation effect visible.",
   },
 ];
 
