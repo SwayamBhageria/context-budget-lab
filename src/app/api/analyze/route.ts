@@ -9,7 +9,7 @@ import { TOKENIZER_NOTE } from "@/lib/tokens";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const { slug, question, budget, withMinimum, anchors } = await req.json();
+  const { slug, question, budget, withMinimum, anchors, includeMarkdown } = await req.json();
 
   if (typeof slug !== "string" || typeof question !== "string") {
     return NextResponse.json({ error: "slug and question are required" }, { status: 400 });
@@ -25,7 +25,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "budget must be 100..200000" }, { status: 400 });
   }
 
-  const loaded = loadRepo(slug);
+  const withMd = includeMarkdown !== false;
+  const loaded = loadRepo(slug, withMd);
   if (!loaded) return NextResponse.json({ error: `unknown repo: ${slug}` }, { status: 404 });
 
   const report = select(loaded.repo, q, Math.floor(b), loaded.graph);
@@ -71,6 +72,7 @@ export async function POST(req: Request) {
     slug,
     question: q,
     note: loaded.note,
+    includeMarkdown: withMd,
     repoTokens: loaded.repo.naiveTokens,
     codeTokens: loaded.codeTokens,
     files: loaded.repo.files.length,
