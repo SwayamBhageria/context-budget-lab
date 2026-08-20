@@ -36,14 +36,16 @@ export interface LoadedRepo {
  * out to matter more than the retrieval algorithm.
  *
  * Documentation is written in the same vocabulary as the questions people ask;
- * the code implementing the behaviour is not. On zustand, which is 89% markdown,
- * indexing the docs pushes the minimum context for "what does devtools connect
- * to" from 3,176 tokens to 15,042, and makes "why might a component not
- * re-render" unreachable at any budget — it resolves at 7,036 without them.
+ * the code implementing the behaviour is not, so both a lexical and a dense
+ * retriever rank prose above mechanism. On zustand, which is 89% markdown,
+ * indexing the docs moves "what does devtools connect to" from 3,147 tokens to
+ * 15,042, and "why might a component not re-render" from 7,036 to 88,244.
  *
- * It is not a simple win either way: clsx is 29% WORSE code-only, because on a
- * 1,300-token library the README genuinely is the best explanation. So this is a
- * control the reader flips, not a default I picked for them.
+ * Measured across the suite it helps or does nothing and never costs, which is
+ * a stronger result than the earlier reading that clsx got worse — that was an
+ * artifact of non-monotone packing, since fixed. It stays a control the reader
+ * flips rather than a silent default, because the effect is entirely a function
+ * of how doc-heavy the repository is and that is theirs to know.
  */
 const cache = new Map<string, LoadedRepo>();
 

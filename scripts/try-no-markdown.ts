@@ -30,8 +30,8 @@ console.log("-".repeat(80));
 for (const c of BENCHMARK) {
   const full = load(c.slug);
   const bare = codeOnly(full);
-  const a = findMinimumBudget(full, c.question, c.anchors, buildGraph(full.files), 64000, "benchmark");
-  const b = findMinimumBudget(bare, c.question, c.anchors, buildGraph(bare.files), 64000, "benchmark");
+  const a = findMinimumBudget(full, c.question, c.anchors, buildGraph(full.files), full.naiveTokens, "benchmark");
+  const b = findMinimumBudget(bare, c.question, c.anchors, buildGraph(bare.files), bare.naiveTokens, "benchmark");
   const fmt = (m: typeof a) => (m.found ? String(m.tokensUsed) : "NEVER");
   const delta =
     a.found && b.found

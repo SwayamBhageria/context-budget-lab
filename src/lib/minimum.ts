@@ -53,16 +53,16 @@ export function findMinimumBudget(
 
   let lo = 0;
   let hi = ceiling;
-  let bestUsed = top.used;
   while (hi - lo > 64) {
     const mid = Math.floor((lo + hi) / 2);
-    const r = ok(mid);
-    if (r.hit) {
-      hi = mid;
-      bestUsed = r.used;
-    } else {
-      lo = mid;
-    }
+    if (ok(mid).hit) hi = mid;
+    else lo = mid;
   }
-  return { found: true, minBudget: hi, tokensUsed: bestUsed, probes, source };
+
+  // Re-probe at the converged budget rather than reporting whichever probe
+  // happened to succeed last. Carrying the last success made the figure depend
+  // on the probe sequence: clsx reported 896 tokens under a 64,000 ceiling and
+  // 1,668 under a 3,258 one, for the same converged threshold.
+  const settled = ok(hi);
+  return { found: true, minBudget: hi, tokensUsed: settled.used, probes, source };
 }

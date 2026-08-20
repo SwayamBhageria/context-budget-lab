@@ -23,7 +23,7 @@ function load(slug: string) {
 
 const rows = BENCHMARK.filter((c) => !c.quarantined).map((c) => {
   const { repo, graph } = load(c.slug);
-  const m = findMinimumBudget(repo, c.question, c.anchors, graph, 64000, "benchmark");
+  const m = findMinimumBudget(repo, c.question, c.anchors, graph, repo.naiveTokens, "benchmark");
   const g = grepBaseline(repo, c.question, []);
   return {
     q: c.question,
