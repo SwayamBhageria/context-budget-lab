@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { buildGraph } from "../src/lib/ingest/graph";
-import { grepBaseline } from "../src/lib/select/baseline";
 import { BENCHMARK } from "../src/lib/benchmark";
 import { findMinimumBudget } from "../src/lib/minimum";
 import type { Repo } from "../src/lib/types";

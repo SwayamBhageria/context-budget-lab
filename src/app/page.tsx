@@ -52,20 +52,20 @@ export default function Page() {
   const [budget, setBudget] = useState(8000);
   const [includeMarkdown, setIncludeMarkdown] = useState(true);
   const [custom, setCustom] = useState("");
-  const [data, setData] = useState<Analysis | null>(null);
+  const [data, setData] = useState<(Analysis & { askedMinimum: boolean }) | null>(null);
   const [tab, setTab] = useState<"kept" | "dropped">("kept");
   const [busy, setBusy] = useState(false);
-  const [asked, setAsked] = useState(false);
   // Chunks the reader has marked as containing the answer. For a question the
   // benchmark does not cover, they are the only oracle available.
-  const [marked, setMarked] = useState<Record<string, { path: string; line: number }>>({});
+  const [markStore, setMarkStore] = useState<Record<string, Record<string, { path: string; line: number }>>>({});
   const [err, setErr] = useState<string | null>(null);
   const seq = useRef(0);
   const listRef = useRef<HTMLElement | null>(null);
   // Set when the reader clicks the minimum figure: re-run at that budget, then
-  // scroll them to the code it is a claim about. A number they cannot see the
-  // basis of is a number they have to take on trust.
-  const [jump, setJump] = useState(false);
+  // scroll them to the code it is a claim about. Refs rather than state — neither
+  // needs to cause a render, and writing state from an effect is what triggers
+  // cascading renders.
+  const jumpRef = useRef(false);
 
   useEffect(() => {
     fetch("/api/analyze")
@@ -96,8 +96,8 @@ export default function Page() {
         // Drop responses from superseded requests so a slow one can't overwrite
         // a newer result while the slider is being dragged.
         if (mine !== seq.current) return;
-        if (!res.ok) { setErr(json.error ?? "request failed"); return; }
-        setData(json);
+        if (!res.ok) { setErr(json.error ?? "request failed"); setData(null); return; }
+        setData({ ...json, askedMinimum: withMinimum });
       } catch {
         if (mine === seq.current) setErr("network error");
       } finally {
@@ -109,19 +109,19 @@ export default function Page() {
 
   useEffect(() => {
     if (!slug || !question) return; // nothing to ask until the corpus has loaded
-    setAsked(false);
+    // run() sets a loading flag synchronously, which the lint rule flags. This is
+    // the ordinary fetch-on-input-change case: two renders per change, no
+    // cascade, and the flag has to be set before the await or the slider gives
+    // no feedback while dragging. Superseded requests are dropped by sequence
+    // number inside run().
+    /* eslint-disable-next-line react-hooks/set-state-in-effect */
     run(false);
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [slug, question, budget, includeMarkdown]);
-  // Marks belong to one question on one repo; carrying them across would
-  // silently measure the wrong thing.
-  useEffect(() => { setMarked({}); }, [slug, question]);
 
   // Runs after the re-render at the new budget, so the row exists to scroll to.
   useEffect(() => {
-    if (!jump || busy || !data) return;
-    setJump(false);
-    setTab("kept");
+    if (!jumpRef.current || busy || !data) return;
+    jumpRef.current = false;
     const el = listRef.current?.querySelector<HTMLElement>('[data-target="1"]');
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -130,10 +130,13 @@ export default function Page() {
         { duration: 1600, easing: "ease-out" },
       );
     }
-  }, [jump, busy, data]);
+  }, [busy, data]);
 
   const presets = meta?.benchmark.filter((b) => b.slug === slug) ?? [];
   const r = data?.report;
+
+  const markKey = `${slug}|${question}`;
+  const marked = markStore[markKey] ?? {};
 
   const targets: { path: string; line: number }[] =
     Object.keys(marked).length > 0
@@ -264,7 +267,7 @@ export default function Page() {
 
         <div className="flex flex-col justify-end gap-2">
           <button
-            onClick={() => { setAsked(true); run(true, Object.values(marked)); }}
+            onClick={() => run(true, Object.values(marked))}
             disabled={busy}
             className="rounded border border-sky-800 bg-sky-950/60 px-3 py-2 text-sm text-sky-300 disabled:opacity-50"
           >
@@ -278,7 +281,7 @@ export default function Page() {
             is reported instead, labelled as what it is: a statement about the
             selector's own confidence, not about whether the answer is present.
           */}
-          {asked && !busy && data && (
+          {data?.askedMinimum && !busy && (
             <div className="max-w-[15rem] text-xs leading-snug">
               {data.minimum ? (
                 data.minimum.found ? (
@@ -286,7 +289,7 @@ export default function Page() {
                     <p>
                       {data.minimum.source === "user-marked" ? "Your marked chunks" : "The answer"} retrieved at{" "}
                       <button
-                        onClick={() => { setBudget(data.minimum!.minBudget!); setJump(true); }}
+                        onClick={() => { setTab("kept"); setBudget(data.minimum!.minBudget!); jumpRef.current = true; }}
                         title="Set the budget here and jump to the code"
                         className="font-mono text-emerald-400 underline decoration-dotted underline-offset-2 hover:text-emerald-300"
                       >
@@ -462,11 +465,11 @@ export default function Page() {
                   {markable && (
                     <button
                       onClick={() =>
-                        setMarked((prev) => {
-                          const next = { ...prev };
-                          if (next[k.chunk.id]) delete next[k.chunk.id];
-                          else next[k.chunk.id] = { path: k.chunk.path, line: k.chunk.startLine + 1 };
-                          return next;
+                        setMarkStore((prev) => {
+                          const cur = { ...(prev[markKey] ?? {}) };
+                          if (cur[k.chunk.id]) delete cur[k.chunk.id];
+                          else cur[k.chunk.id] = { path: k.chunk.path, line: k.chunk.startLine + 1 };
+                          return { ...prev, [markKey]: cur };
                         })
                       }
                       title="Mark this chunk as containing the answer"

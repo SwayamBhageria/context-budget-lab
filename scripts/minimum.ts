@@ -1,17 +1,18 @@
 import { readFileSync } from "node:fs";
 import { buildGraph } from "../src/lib/ingest/graph";
+import type { Repo } from "../src/lib/types";
 import { grepBaseline } from "../src/lib/select/baseline";
 import { select } from "../src/lib/select";
 import { BENCHMARK } from "../src/lib/benchmark";
 import { findMinimumBudget } from "../src/lib/minimum";
 
-const cache = new Map<string, any>();
+const cache = new Map<string, { repo: Repo; graph: ReturnType<typeof buildGraph> }>();
 function repoFor(slug: string) {
   if (!cache.has(slug)) {
     const fx = JSON.parse(readFileSync(`src/fixtures/${slug.replace("/", "__")}.json`, "utf8"));
     cache.set(slug, { repo: fx.repo, graph: buildGraph(fx.repo.files) });
   }
-  return cache.get(slug);
+  return cache.get(slug)!;
 }
 
 console.log(
