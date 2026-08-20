@@ -5,6 +5,7 @@ import { grepBaseline } from "@/lib/select/baseline";
 import { BENCHMARK, measureCase } from "@/lib/benchmark";
 import { findMinimumBudget } from "@/lib/minimum";
 import { TOKENIZER_NOTE } from "@/lib/tokens";
+import embeddingBaseline from "@/fixtures/embedding-baseline.json";
 
 export const maxDuration = 60;
 
@@ -99,6 +100,14 @@ export async function POST(req: Request) {
     grep,
     recall,
     minimum,
+    // The dense baseline for this exact question, where one was precomputed.
+    // Shown because it beats this selector on eight of the nine benchmark
+    // questions, and hiding that would make the app an advert rather than an
+    // instrument.
+    embedding:
+      (embeddingBaseline as Record<string, { model: string; reached: boolean; minTokens: number | null }>)[
+        `${slug}|${q}`
+      ] ?? null,
     tokenizerNote: TOKENIZER_NOTE,
   });
 }

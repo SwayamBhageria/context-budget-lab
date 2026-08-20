@@ -65,18 +65,21 @@ Three rules make the number mean something:
 
 ## The corpus
 
-Five repositories, three languages, markdown share from 1% to 89%. The first
-three were small JavaScript frontend libraries, which is not what a coding agent
-works on; flask and gin were added specifically because that distribution
-flattered the result.
+Five repositories, four languages, 2k to 316k tokens, markdown share 1% to 89%.
+An earlier version used small JavaScript frontend libraries, which is neither
+what a coding agent works on nor anything an AI engineer would recognise.
 
-| Repo | Tokens | Markdown | Language |
-|---|---:|---:|---|
-| lukeed/clsx | 3,258 | 59% | JS |
-| vercel/swr | 36,968 | 3% | TS |
-| pallets/flask | 78,382 | 1% | Python |
-| pmndrs/zustand | 108,567 | 89% | TS |
-| gin-gonic/gin | 219,137 | 12% | Go |
+| Repo | Tokens | Markdown | Language | Why it is here |
+|---|---:|---:|---|---|
+| karpathy/micrograd | 2,089 | 39% | Python | Too small for selection to earn its place |
+| karpathy/nanoGPT | 17,282 | 23% | Python | The working zone |
+| pallets/flask | 78,382 | 1% | Python | Code-heavy counter-case |
+| pmndrs/zustand | 108,567 | 89% | TS | Doc-heavy — makes the markdown effect visible |
+| karpathy/llm.c | 316,057 | 13% | C / CUDA | Scale, and a language the chunker was not built for |
+
+Any other public repository can be indexed live, capped at 2.5MB of source. The
+cap is derived from measurement — 664,820 tokens index in 3.0s locally — and over
+it the app refuses with the real size rather than truncating.
 
 ## Results
 
@@ -85,31 +88,61 @@ Grep is best-case: the single most selective non-stopword term, matching files
 included whole — what a competent engineer actually does. Embeddings are
 all-MiniLM-L6-v2, run locally.
 
-| Question | Repo | BM25+graph | Best grep | Embeddings |
+| Question | Repo | BM25+graph | Best grep | Ratio |
 |---|---:|---:|---:|---:|
-| zustand: subscribeWithSelector fires | 108,567 | 616 | 1,811 | **387** |
-| zustand: shallow compares Maps/Sets | 108,567 | **1,878** | 7,638 | 2,055 |
-| swr: deduping interval | 36,968 | **2,921** | 17,335 | 13,074 |
-| zustand: persist finished hydrating | 108,567 | 3,854 | 15,959 | **319** |
-| clsx: nested arrays and objects | 3,258 | 3,085 | **1,214** | 3,059 |
-| zustand: devtools connects to what | 108,567 | 15,042 | 33,997 | **10,813** |
-| flask: URL to view function | 78,382 | **46,047** | 52,344 | 71,736 |
-| zustand: why no re-render *(declared hard)* | 108,567 | 88,244 | **35,979** | 38,628 |
-| gin: request path to handler | 219,137 | 114,092 | **109,617** | 175,649 |
+| micrograd: how backward propagates gradients | 2,089 | 567 | 806 | 1.4× |
+| nanoGPT: how causal self-attention is masked | 17,282 | 1,077 | 4,139 | 3.8× |
+| llm.c: the CPU reference attention pass | 316,057 | 66,385 | 160,776 | 2.4× |
+| flask: URL to view function | 78,382 | 46,047 | 52,344 | 1.1× |
+| zustand: shallow compares Maps/Sets | 108,567 | 2,245 | 7,638 | 3.4× |
+| zustand: devtools connects to what | 108,567 | 15,603 | 33,997 | 2.2× |
+| zustand: persist finished hydrating | 108,567 | 4,038 | 15,959 | 4.0× |
+| zustand: subscribeWithSelector fires | 108,567 | 616 | 1,811 | 2.9× |
+| zustand: why no re-render *(declared hard)* | 108,567 | 87,073 | 35,979 | **0.4×** |
 
-Every figure is the smallest context in which that strategy retrieves the
-ground-truth lines, searched up to the repository's own size — there is no
-arbitrary ceiling, because you cannot send more than everything.
+Every figure is the smallest context in which the strategy retrieves the
+ground-truth lines, searched up to the repository's own size — no arbitrary
+ceiling, because you cannot send more than everything.
 
-**Nothing dominates, and this selector loses four of nine.** It wins clearly on
-four questions (2.3×–5.9×), ties flask and gin, and is beaten by grep on clsx
-(0.4×) and on the hard zustand question (0.4×). Embeddings win three outright,
-including persist by 12× (319 vs 3,854), and are worst of three on flask and gin.
+**Eight of nine beat grep; one loses badly.** The win holds on llm.c, 316k tokens
+of C and CUDA at 2.4×, which matters because the chunker was not written for that
+language family. The loss is the pre-registered hard case, where grep is 2.4×
+better than this selector.
 
-The wins share one property: a rare, distinctive identifier in the question —
-`subscribeWithSelector`, `deduping`, `hydrating`, `devtools`. The losses are
-questions phrased in their domain's own vocabulary, where no term is selective
-and all three methods degrade together.
+The wins share one property: a rare identifier in the question —
+`subscribeWithSelector`, `hydrating`, `devtools`, `masked`, `backward`. The two
+weakest results, flask at 1.1× and the hard zustand question at 0.4×, are the two
+questions phrased entirely in their domain's own vocabulary, where no term is
+selective and every method degrades together.
+
+### The shipped selector is the wrong one for this corpus
+
+A dense baseline (all-MiniLM-L6-v2, run locally, no API) measured on the same
+questions and the same ground truth:
+
+| Question | BM25+graph | Embeddings |
+|---|---:|---:|
+| llm.c: CPU attention | 66,385 | **6,630** |
+| zustand: why no re-render | 87,073 | **34,833** |
+| zustand: devtools | 15,603 | **11,446** |
+| zustand: persist | 4,038 | **319** |
+| zustand: shallow | 2,245 | **2,055** |
+| zustand: subscribeWithSelector | 616 | **387** |
+| nanoGPT: causal mask | 1,077 | **846** |
+| micrograd: backward | 567 | 567 |
+| flask: URL to view | **46,047** | 71,736 |
+
+**Embeddings win eight of nine**, by 10× on llm.c and 12× on persist. On an
+earlier JavaScript corpus the two traded wins roughly evenly. So which retriever
+is "better" is a property of the corpus, not the algorithm — and I shipped the
+one that loses on this one.
+
+I would not undo that choice, but I would not hide the cost either. BM25 was
+chosen because it runs free in single-digit milliseconds with no key, no vector
+store and no warm index, which is what makes a live budget slider and a keyless
+public demo possible at all. That deployability costs real accuracy, and the
+measurement above is what it costs. Both numbers are shown side by side in the
+app for the same reason.
 
 ### The index matters more than the algorithm
 
@@ -117,20 +150,19 @@ Excluding markdown from the index:
 
 | Question | With markdown | Code only | Change |
 |---|---:|---:|---|
-| zustand: why no re-render | 88,244 | **7,036** | −92% |
-| zustand: devtools | 15,042 | 3,147 | −79% |
-| zustand: persist | 3,854 | 845 | −78% |
-| clsx: nested | 3,085 | 1,156 | −63% |
-| zustand: shallow | 1,878 | 709 | −62% |
+| zustand: why no re-render | 87,073 | **7,036** | −92% |
+| zustand: devtools | 15,603 | 3,147 | −80% |
+| zustand: persist | 4,038 | 845 | −79% |
+| zustand: shallow | 2,245 | 709 | −68% |
 | zustand: subscribeWithSelector | 616 | 442 | −28% |
-| gin: path to handler | 114,092 | 99,634 | −13% |
-| flask, swr | unchanged | unchanged | ~0% |
+| llm.c: CPU attention | 66,385 | 60,759 | −8% |
+| micrograd, nanoGPT, flask | ~unchanged | ~unchanged | 0–2% |
 
 The worst question in the suite improves by 92%. Documentation is written in the
 vocabulary people ask questions in and the code implementing the behaviour is
-not, so both retrievers rank prose above mechanism. The effect scales with how
-doc-heavy the repository is: 89%-markdown zustand is transformed, 3%-markdown swr
-is untouched.
+not, so both retrievers rank prose above mechanism. The effect scales precisely
+with how doc-heavy the repository is: 89%-markdown zustand is transformed, while
+the code-heavy AI repos move 0–8%.
 
 Across the suite, excluding markdown helps or does nothing and **never costs**.
 An earlier version of this document reported that clsx got 29% *worse* code-only
@@ -139,22 +171,17 @@ described below, and it reversed once the bug was fixed. It ships as a control
 rather than a silent default because how doc-heavy a repository is, is something
 its owner knows and this tool does not.
 
-### The advantage largely disappears on representative repos
+### The corpus changes the answer
 
-On the two code-heavy repos — the ones that actually resemble a working codebase
-— flask gives a 1.1× advantage over grep and gin gives 1.0×. Both need over half
-their repository. All three strategies are close to useless there.
+An intermediate corpus included `gin-gonic/gin`, where the advantage collapsed to
+1.0× and the selector needed half the repository. Swapping corpora moved the
+headline more than any algorithm change did.
 
-That matters more than the wins. The first three fixtures were small JavaScript
-frontend libraries, and on that corpus the selector looked 2.3×–5.9× better than
-grep. Adding two ordinary code-heavy repositories collapsed the advantage to
-nothing. **A retrieval result measured only on small documented libraries does
-not transfer**, and that is a caution that applies to this project's own early
-numbers as much as to anyone else's.
-
-Whether the cause is generic query vocabulary or repository size cannot be
-separated with nine questions — the hard cases are the two largest repos *and*
-the two most generic questions. I am not going to pick one and call it a finding.
+That is the caution I would want stated loudest, and it applies to this project's
+own numbers as much as anyone else's: **a retrieval result is a property of the
+corpus it was measured on.** flask still sits at 1.1× here. Nine questions across
+five repositories is enough to show that the spread is wide; it is not enough to
+claim a general figure, and I have not quoted one.
 
 ## Decisions, and five things measurement reversed
 
@@ -186,7 +213,18 @@ Five things I asserted and measurement contradicted:
    that was an arbitrary 64,000-token search ceiling while embeddings were
    allowed to rank the whole repository. With the ceiling set to the repo's own
    size, both resolve, and both are then beaten by grep.
-7. *Packing was still non-monotone after the first fix.* Pass one grows with the
+7. **The indexer silently read 17% of a repository.** The source-file filter had
+   no `.c`, `.h`, `.cu` or `.cpp`, so `llm.c` indexed 157KB of Python and
+   markdown, ignored 950KB of C and CUDA, and reported a confident 85.6%
+   reduction over the fraction it saw. Nothing raised — it simply succeeded.
+   Indexing the real thing takes the repo from 52,762 to 316,057 tokens. Every
+   repository now reports what share of its source was indexed, because the only
+   reason that bug was invisible is that nothing was measuring it.
+8. **The tokenizer refused the corpus the tool is aimed at.** `js-tiktoken`
+   throws on special tokens, and `<|endoftext|>` appears as ordinary source
+   throughout ML code — seven of ten candidate AI repositories failed to ingest.
+   One argument fixed it. It would never have surfaced on frontend libraries.
+9. *Packing was still non-monotone after the first fix.* Pass one grows with the
    budget, so the room left over for graph expansion could shrink while the total
    grew, and clsx lost its answer between budgets 1,215 and 1,641. Selection is
    now a single prefix of one fixed order. A monotonicity check over every case
@@ -195,6 +233,18 @@ Five things I asserted and measurement contradicted:
 **A ratio is withheld when recall is incomplete.** At a 1,000-token budget the UI
 reported "26.0× vs best grep" while having retrieved one of two anchors. Any
 selector can beat grep if allowed to return the wrong code.
+
+## Live repositories
+
+Any public repo can be indexed on demand, which is how an interviewer's own
+codebase gets in. It is capped at 2.5MB of indexable source — derived from
+measuring 664,820 tokens indexed in 3.0s locally, then leaving headroom for a
+slower serverless instance inside a 60-second limit. Over the cap the app refuses
+and names the real size: `vllm-project/vllm` returns 413 with "42.5MB of
+indexable source". Truncating to fit and reporting a number would reproduce
+exactly the llm.c failure above.
+
+Live repos carry no pre-registered ground truth, so no recall is shown.
 
 ## Questions outside the benchmark
 
