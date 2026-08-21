@@ -50,7 +50,7 @@ a live budget slider and a keyless public demo possible at all.
 | karpathy/nanoGPT | 17,282 | 23% | Python | The working zone |
 | pallets/flask | 78,382 | 1% | Python | Code-heavy counter-case |
 | pmndrs/zustand | 108,567 | 89% | TS | Doc-heavy — makes the markdown effect visible |
-| karpathy/llm.c | 316,057 | 13% | C / CUDA | Scale, and a language family outside the chunker's origins |
+| karpathy/llm.c | 316,057 | 4% | C / CUDA | Scale, and a language family outside the chunker's origins |
 
 Chosen by measurement (`scripts/pick-corpus.ts`), not by taste. Any other public
 repository can be indexed live, capped at 2.5MB of source — over that the app
@@ -59,7 +59,7 @@ refuses with the real size rather than truncating.
 ## Findings
 
 **The index matters more than the algorithm.** Excluding markdown moves zustand's
-questions by 28–92%, and moves the code-heavy repos by 0–8%. Documentation is
+questions by 57–93%, and moves the code-heavy repos by 0–6%. Documentation is
 written in the vocabulary people ask questions in and the implementing code is
 not, so every retriever ranks prose above mechanism — but only where there is
 enough prose to matter.

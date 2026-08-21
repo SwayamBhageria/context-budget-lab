@@ -38,8 +38,8 @@ export interface LoadedRepo {
  * Documentation is written in the same vocabulary as the questions people ask;
  * the code implementing the behaviour is not, so both a lexical and a dense
  * retriever rank prose above mechanism. On zustand, which is 89% markdown,
- * indexing the docs moves "what does devtools connect to" from 3,147 tokens to
- * 15,042, and "why might a component not re-render" from 7,036 to 88,244.
+ * indexing the docs moves "what does devtools connect to" from 2,454 tokens to
+ * 7,277, and "why might a component not re-render" from 4,246 to 63,043.
  *
  * Measured across the suite it helps or does nothing and never costs, which is
  * a stronger result than the earlier reading that clsx got worse — that was an
