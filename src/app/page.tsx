@@ -41,6 +41,8 @@ type Meta = {
 
 const n = (v: number) => v.toLocaleString("en-US");
 
+const INITIAL_BUDGET = 8000;
+
 export default function Page() {
   const [meta, setMeta] = useState<Meta | null>(null);
   // Empty until the corpus loads, then taken from it. Hardcoding a default slug
@@ -49,7 +51,7 @@ export default function Page() {
   // benchmark no longer contains.
   const [slug, setSlug] = useState("");
   const [question, setQuestion] = useState("");
-  const [budget, setBudget] = useState(8000);
+  const [budget, setBudget] = useState(INITIAL_BUDGET);
   const [includeMarkdown, setIncludeMarkdown] = useState(true);
   const [custom, setCustom] = useState("");
   const [data, setData] = useState<(Analysis & { askedMinimum: boolean }) | null>(null);
@@ -72,10 +74,17 @@ export default function Page() {
       .then((r) => r.json())
       .then((m: Meta) => {
         setMeta(m);
-        const first = m.repos?.[0];
-        if (first) {
-          setSlug(first.slug);
-          setQuestion(m.benchmark.find((b) => b.slug === first.slug)?.question ?? first.defaultQuestion);
+        // The list is ordered smallest-first because that ordering is itself
+        // the argument, but the smallest repo is the one where selection
+        // cannot earn its place — it fits inside the budget whole, so the
+        // landing view opened on a 0.4x against grep. Land on the smallest
+        // repo the budget does not already swallow. Derived from the corpus
+        // rather than a hardcoded slug, which is what previously left the
+        // page live-fetching a repository the benchmark no longer contained.
+        const landing = m.repos?.find((rp) => rp.tokens > INITIAL_BUDGET) ?? m.repos?.[0];
+        if (landing) {
+          setSlug(landing.slug);
+          setQuestion(m.benchmark.find((b) => b.slug === landing.slug)?.question ?? landing.defaultQuestion);
         }
       })
       .catch(() => {});
@@ -116,7 +125,9 @@ export default function Page() {
     // number inside run().
     /* eslint-disable-next-line react-hooks/set-state-in-effect */
     run(false);
-  }, [slug, question, budget, includeMarkdown]);
+    // run is memoised on exactly these four, so listing it changes nothing at
+    // runtime and lets the dependency rule verify that rather than assume it.
+  }, [run, slug, question, budget, includeMarkdown]);
 
   // Runs after the re-render at the new budget, so the row exists to scroll to.
   useEffect(() => {
@@ -134,6 +145,34 @@ export default function Page() {
 
   const presets = meta?.benchmark.filter((b) => b.slug === slug) ?? [];
   const r = data?.report;
+
+  // Both comparison tiles must divide by the same thing. The dense tile scores
+  // grep's opponent as the minimum budget that still answers, while this one
+  // was dividing by whatever the current budget happened to pack — so the same
+  // selector read 3.5x against grep and 0.9x on the tile beside it, purely
+  // because a slider sat above the minimum. The claim this project makes is
+  // about minimum context, so use that once it has been measured, and say
+  // which of the two numbers is on screen.
+  const grepDenominator = data?.minimum?.found && data.minimum.tokensUsed ? data.minimum.tokensUsed : r?.selectedTokens;
+  const grepAtMinimum = !!(data?.minimum?.found && data.minimum.tokensUsed);
+
+  // A ratio against grep is only meaningful when the selection is known to
+  // contain the answer, and there are three ways that knowledge is missing —
+  // not one. Guarding on measured-and-short alone let the other two through:
+  // a question with no ground truth has nothing to verify against, and a
+  // selection of zero tokens has no denominator. Together they rendered a
+  // total retrieval failure as "806.0×", the best number on the page.
+  const grepRatioWithheld = !r
+    ? null
+    : grepAtMinimum
+      ? null // a minimum exists only because the answer was retrieved at it
+      : r.selectedTokens === 0
+        ? "nothing was selected — there is no ratio to take"
+        : !data?.recall
+          ? "no ground truth for this question — ratio unverifiable"
+          : data.recall.recallPct < 100
+            ? "answer not retrieved — ratio would be meaningless"
+            : null;
 
   const markKey = `${slug}|${question}`;
   const marked = markStore[markKey] ?? {};
@@ -245,8 +284,8 @@ export default function Page() {
               <span className="text-xs text-neutral-300">Index markdown as well as code</span>
               <span className="text-[11px] leading-snug text-neutral-500">
                 Docs share vocabulary with questions; code does not, so they crowd out the
-                implementation. Turning this off drops zustand&apos;s devtools question from 15,042
-                tokens to 3,147, and &quot;why no re-render&quot; from 88,244 to 7,036. Across the
+                implementation. Turning this off drops zustand&apos;s devtools question from 7,277
+                tokens to 2,454, and &quot;why no re-render&quot; from 63,043 to 4,246. Across the
                 suite it helps or does nothing — it never costs.
               </span>
             </span>
@@ -360,23 +399,25 @@ export default function Page() {
             />
             <Stat
               label="vs best grep"
-              // Withheld unless every anchor was retrieved. A ratio next to a
-              // failed retrieval reads as a win and is the exact number that
-              // makes these tools look better than they are: any selector can
-              // be 26x smaller than grep by returning the wrong code.
+              // Withheld unless the selection is known to contain the answer.
+              // A ratio next to a failed retrieval reads as a win and is the
+              // exact number that makes these tools look better than they are:
+              // any selector can be 26x smaller than grep by returning the
+              // wrong code, and infinitely smaller by returning none.
               value={
-                data.recall && data.recall.recallPct < 100
+                grepRatioWithheld
                   ? "n/a"
-                  : data.grep.bestTokens > 0
-                    ? `${(data.grep.bestTokens / Math.max(r.selectedTokens, 1)).toFixed(1)}×`
+                  : data.grep.bestTokens > 0 && grepDenominator
+                    ? `${(data.grep.bestTokens / grepDenominator).toFixed(1)}×`
                     : "—"
               }
               sub={
-                data.recall && data.recall.recallPct < 100
-                  ? "answer not retrieved — ratio would be meaningless"
-                  : `scored in ${r.timings.scoreMs + r.timings.expandMs + r.timings.packMs}ms`
+                grepRatioWithheld ??
+                (grepAtMinimum
+                  ? `at minimum context — ${n(grepDenominator!)} tokens`
+                  : `at this budget — press find minimum to compare like for like`)
               }
-              muted={!!data.recall && data.recall.recallPct < 100}
+              muted={!!grepRatioWithheld}
             />
           </section>
 
