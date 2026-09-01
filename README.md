@@ -56,6 +56,34 @@ Chosen by measurement (`scripts/pick-corpus.ts`), not by taste. Any other public
 repository can be indexed live, capped at 2.5MB of source — over that the app
 refuses with the real size rather than truncating.
 
+## Results
+
+The smallest context at which each strategy retrieves the ground-truth lines,
+searched up to the repository's own size — no arbitrary ceiling, because you
+cannot send more than everything. Grep is best-case: the single most selective
+non-stopword term, with matching files included whole.
+
+| Question | Repo | This selector | Best grep | Ratio |
+|---|---:|---:|---:|---:|
+| micrograd: how backward propagates | 2,089 | 1,475 | 806 | 0.5x |
+| nanoGPT: how causal attention is masked | 17,282 | 1,199 | 4,139 | 3.5x |
+| llm.c: the CPU reference attention pass | 316,057 | 65,521 | 160,776 | 2.5x |
+| flask: URL to view function | 78,382 | 21,989 | 52,344 | 2.4x |
+| zustand: shallow compares Maps and Sets | 108,567 | 1,257 | 7,638 | 6.1x |
+| zustand: what devtools connects to | 108,567 | 7,277 | 33,997 | 4.7x |
+| zustand: how persist knows it hydrated | 108,567 | 13,890 | 15,959 | 1.1x |
+| zustand: when subscribeWithSelector fires | 108,567 | 2,253 | 1,811 | 0.8x |
+| zustand: why a component does not re-render | 108,567 | 63,043 | 35,979 | 0.6x |
+
+Six of nine beat grep. Three lose, and the losses are kept. llm.c holding 2.5x
+matters most — that is 316k tokens of C and CUDA, a language family the chunker
+was not written for.
+
+The wins share one property: a rare identifier in the question, like
+`subscribeWithSelector` or `devtools` or `masked`. The losses are questions
+phrased in the domain's own vocabulary, where nothing is selective and every
+method degrades together.
+
 ## Findings
 
 **The index matters more than the algorithm.** Excluding markdown moves zustand's
@@ -63,6 +91,15 @@ questions by 57–93%, and moves the code-heavy repos by 0–6%. Documentation i
 written in the vocabulary people ask questions in and the implementing code is
 not, so every retriever ranks prose above mechanism — but only where there is
 enough prose to matter.
+
+| Question | With markdown | Code only | Change |
+|---|---:|---:|---|
+| zustand: why no re-render | 63,043 | 4,246 | 93% less |
+| zustand: persist | 13,890 | 2,452 | 82% less |
+| zustand: devtools | 7,277 | 2,454 | 66% less |
+| micrograd: backward | 1,475 | 669 | 55% less |
+| llm.c: CPU attention | 65,521 | 61,469 | 6% less |
+| flask, nanoGPT | flat | flat | 0% |
 
 **Chunk quality does not predict retrieval quality.** Making class methods into
 chunk boundaries cut flask's blind force-splits from 33% to 2% and raised symbol
@@ -73,6 +110,37 @@ for dense on one chunking and 5–4 on another. Both runs were internally fair; 
 only thing that changed touched neither retriever. What survives both is that the
 two fail on *different* questions — an argument for hybrid retrieval, not for
 either one.
+
+## What measurement reversed
+
+Every one of these made the result look better than it was, and every one was
+caught by running something rather than reasoning about it.
+
+1. **Expansion outranked direct matches.** Chunks in a seed file inherited the
+   repo's top score undecayed, so 27-token fragments of a types file won the
+   density sort and the selector missed the answer.
+2. **Recall was measured per file**, so a 22-token fragment of a file's first
+   three lines counted as finding the answer. Line anchors dropped measured
+   recall at 3.2k from 86% to 57%.
+3. **Retrieval was non-monotone in budget.** Best-fit packing let a larger budget
+   displace chunks a smaller one had found, so binary search over it was noise.
+   Selection is now one prefix of one fixed order, with a check across every case.
+4. **The grep baseline was a strawman.** It unioned every query term, so a common
+   word pulled in 98% of zustand. Using the most selective term cut the claimed
+   advantage from ~13x to ~3x. The smaller number is the real one.
+5. **Embeddings were asserted as the fix** for the failing question, in the app,
+   before being tested. They are not: the ten nearest neighbours are all markdown
+   and the answer sites rank 134th and 170th.
+6. **Two questions were reported unretrievable at any budget.** They were not —
+   that was an arbitrary 64,000-token search ceiling while embeddings ranked the
+   whole repo. Both resolve, and both are then beaten by grep.
+7. **The indexer silently read 17% of llm.c.** The source filter had no `.c`,
+   `.h` or `.cu`, so it indexed 157KB of Python and markdown, ignored 950KB of C
+   and CUDA, and reported a confident reduction over the sliver it saw. Nothing
+   raised. Every repo reports its coverage now.
+8. **The tokenizer refused the corpus the tool is for.** js-tiktoken throws on
+   special tokens and `<|endoftext|>` is ordinary source text in ML code, so
+   seven of ten candidate AI repos failed to ingest.
 
 ## Method notes
 
