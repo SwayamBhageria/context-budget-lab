@@ -12,6 +12,10 @@ lives.
 
 **Live:** https://context-budget-lab.vercel.app
 
+![Context Budget Lab: nanoGPT's causal-attention question answered at 1,199 tokens against 4,139 for best-case grep, with both ground-truth anchors retrieved](docs/screenshot.png)
+
+*nanoGPT, at the minimum budget that still answers: 3.5x less context than best-case grep, both ground-truth anchors retrieved — and the dense baseline beating this selector by 1.4x, reported rather than hidden.*
+
 ## What it measures
 
 **Minimum viable context** — the smallest budget at which retrieval returns the
@@ -87,7 +91,8 @@ method degrades together.
 ## Findings
 
 **The index matters more than the algorithm.** Excluding markdown moves zustand's
-questions by 57–93%, and moves the code-heavy repos by 0–6%. Documentation is
+questions by 57–93% and micrograd's by 55%, and moves the code-heavy repos by
+0–6%. The effect tracks how doc-heavy the repository is. Documentation is
 written in the vocabulary people ask questions in and the implementing code is
 not, so every retriever ranks prose above mechanism — but only where there is
 enough prose to matter.
@@ -148,10 +153,8 @@ Ground truth is fixed before the selector runs, every case declares its
 expectation in advance, and questions expected to fail are kept — a suite that
 scores 100% is a suite whose questions were chosen to score 100%.
 
-Repositories report what share of their source was indexed. That check exists
-because its absence hid a real bug: the source filter had no `.c`/`.h`/`.cu`, so
-llm.c indexed 17% of itself and reported a confident reduction over the fraction
-it saw.
+Repositories report what share of their source was indexed — a check that exists
+because its absence hid item 7 above for as long as nothing was measuring it.
 
 ## Running it
 
@@ -171,6 +174,8 @@ No API key is required for indexing, scoring, selection, or any reported number.
 | `scripts/check-monotone.ts` | Verifies retrieval is monotone in budget |
 | `scripts/chunk-quality.ts` | Force-split and symbol coverage by language |
 | `scripts/selectivity.ts` | Whether advantage tracks query vocabulary or repo size |
+| `scripts/grep-repo.ts` | The best-case grep baseline each result is scored against |
+| `scripts/build-fixtures.ts` | Rebuilds the shipped corpus fixtures |
 | `scripts/pick-corpus.ts` | How the corpus was chosen |
 | `scripts/verify-ui.ts` | Headless smoke test of the deployed app |
 
