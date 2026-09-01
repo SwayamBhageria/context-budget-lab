@@ -183,8 +183,8 @@ never redistributed; they are downloaded on request and held in memory only.
 
 ## Known limits
 
-- Nine questions is a small suite. Enough to show shape and to surface eleven
-  real errors; not enough to claim a general result.
+- Nine questions is a small suite. Enough to show shape and to surface the eight
+  errors listed above; not enough to claim a general result.
 - Ground truth is one person's reading, though every anchor records the grep that
   found it.
 - The dense baseline is one small general-purpose model; a code-trained embedding
